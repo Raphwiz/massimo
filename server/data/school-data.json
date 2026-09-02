@@ -1,0 +1,531 @@
+{
+  "calendarEvents": [
+    {
+      "id": "meeting",
+      "date": "2026-05-30",
+      "title": "Parents’ Meeting — Grade 7",
+      "detail": "2:00 PM · School hall"
+    },
+    {
+      "id": "break",
+      "date": "2026-06-06",
+      "title": "Mid-term Break begins",
+      "detail": "School closes at 3:30 PM"
+    },
+    {
+      "id": "mass",
+      "date": "2026-06-23",
+      "title": "Whole School Mass",
+      "detail": "8:00 AM · Parish church"
+    },
+    {
+      "id": "briefing",
+      "date": "2026-06-27",
+      "title": "Grade 9 assessment briefing",
+      "detail": "10:00 AM · Multipurpose room"
+    }
+  ],
+  "smsMessages": [],
+  "admissions": [
+    {
+      "id": "admission-1788099318037",
+      "learnerName": "RAPHAEL GIKUNDI",
+      "grade": "Grade 1",
+      "guardianName": "BETTY NTINYARI",
+      "guardianPhone": "254717089754",
+      "relationship": "Guardian",
+      "formerSchool": "KAAGA PRIMARY",
+      "medicalNotes": "See Me",
+      "birthCertificateProvided": true,
+      "status": "Placement confirmed · Grade 1 Honest",
+      "createdAt": "2026-08-30T14:15:18.037Z",
+      "updatedAt": "2026-08-31T05:40:55.798Z",
+      "admissionNumber": "SD/ADM/2026/0001",
+      "placement": {
+        "id": "placement-1788101285841",
+        "admissionId": "admission-1788099318037",
+        "admissionNumber": "SD/ADM/2026/0001",
+        "learnerName": "RAPHAEL GIKUNDI",
+        "requestedGrade": "Grade 1",
+        "className": "Grade 1 Honest",
+        "academicYear": "2026",
+        "term": "Term 3",
+        "decision": "Confirmed",
+        "assessmentResult": "Passed",
+        "notes": "",
+        "assignedBy": "School office",
+        "assignedAt": "2026-08-30T14:48:05.840Z",
+        "updatedAt": "2026-08-31T05:40:55.798Z"
+      }
+    },
+    {
+      "id": "admission-1788099142592",
+      "learnerName": "RAPHAEL GIKUNDI",
+      "grade": "Grade 3",
+      "guardianName": "BETTY NTINYARI",
+      "guardianPhone": "254717089754",
+      "relationship": "Guardian",
+      "formerSchool": "KAAGA PRIMARY",
+      "medicalNotes": "",
+      "birthCertificateProvided": true,
+      "status": "Placement confirmed · Grade 3 West",
+      "createdAt": "2026-08-30T14:12:22.592Z",
+      "admissionNumber": "SD/ADM/2026/0002",
+      "placement": {
+        "id": "placement-1788116670758",
+        "admissionId": "admission-1788099142592",
+        "admissionNumber": "SD/ADM/2026/0002",
+        "learnerName": "RAPHAEL GIKUNDI",
+        "requestedGrade": "Grade 3",
+        "className": "Grade 3 West",
+        "academicYear": "2026",
+        "term": "Term 3",
+        "decision": "Confirmed",
+        "assessmentResult": "",
+        "notes": "placed",
+        "assignedBy": "School office",
+        "assignedAt": "2026-08-30T19:04:30.758Z",
+        "updatedAt": "2026-08-30T19:04:30.758Z"
+      },
+      "updatedAt": "2026-08-30T19:04:30.758Z"
+    },
+    {
+      "id": "admission-1788099113600",
+      "learnerName": "RAPHAEL GIKUNDI",
+      "grade": "Grade 4",
+      "guardianName": "BETTY NTINYARI",
+      "guardianPhone": "254717089754",
+      "relationship": "Guardian",
+      "formerSchool": "KAAGA PRIMARY",
+      "medicalNotes": "Allergic to githeri",
+      "birthCertificateProvided": true,
+      "status": "Placement confirmed · Grade 4 Obedient",
+      "createdAt": "2026-08-30T14:11:53.600Z",
+      "admissionNumber": "SD/ADM/2026/0003",
+      "placement": {
+        "id": "placement-1788159464970",
+        "admissionId": "admission-1788099113600",
+        "admissionNumber": "SD/ADM/2026/0003",
+        "learnerName": "RAPHAEL GIKUNDI",
+        "requestedGrade": "Grade 4",
+        "className": "Grade 4 Obedient",
+        "academicYear": "2026",
+        "term": "Term 2",
+        "decision": "Confirmed",
+        "assessmentResult": "Passed",
+        "notes": "",
+        "assignedBy": "School office",
+        "assignedAt": "2026-08-31T06:57:44.970Z",
+        "updatedAt": "2026-08-31T06:57:44.970Z"
+      },
+      "updatedAt": "2026-08-31T06:57:44.970Z"
+    }
+  ],
+  "admissionEnquiries": [],
+  "classPlacements": [
+    {
+      "id": "placement-1788159464970",
+      "admissionId": "admission-1788099113600",
+      "admissionNumber": "SD/ADM/2026/0003",
+      "learnerName": "RAPHAEL GIKUNDI",
+      "requestedGrade": "Grade 4",
+      "className": "Grade 4 Obedient",
+      "academicYear": "2026",
+      "term": "Term 2",
+      "decision": "Confirmed",
+      "assessmentResult": "Passed",
+      "notes": "",
+      "assignedBy": "School office",
+      "assignedAt": "2026-08-31T06:57:44.970Z",
+      "updatedAt": "2026-08-31T06:57:44.970Z"
+    },
+    {
+      "id": "placement-1788116670758",
+      "admissionId": "admission-1788099142592",
+      "admissionNumber": "SD/ADM/2026/0002",
+      "learnerName": "RAPHAEL GIKUNDI",
+      "requestedGrade": "Grade 3",
+      "className": "Grade 3 West",
+      "academicYear": "2026",
+      "term": "Term 3",
+      "decision": "Confirmed",
+      "assessmentResult": "",
+      "notes": "placed",
+      "assignedBy": "School office",
+      "assignedAt": "2026-08-30T19:04:30.758Z",
+      "updatedAt": "2026-08-30T19:04:30.758Z"
+    },
+    {
+      "id": "placement-1788101285841",
+      "admissionId": "admission-1788099318037",
+      "admissionNumber": "SD/ADM/2026/0001",
+      "learnerName": "RAPHAEL GIKUNDI",
+      "requestedGrade": "Grade 1",
+      "className": "Grade 1 Honest",
+      "academicYear": "2026",
+      "term": "Term 3",
+      "decision": "Confirmed",
+      "assessmentResult": "Passed",
+      "notes": "",
+      "assignedBy": "School office",
+      "assignedAt": "2026-08-30T14:48:05.840Z",
+      "updatedAt": "2026-08-31T05:40:55.798Z"
+    }
+  ],
+  "receipts": [
+    {
+      "id": "receipt-1788112110336",
+      "receiptNumber": "SD/RCT/2026/0002",
+      "mpesaTransactionId": "mpesa-1788112097306",
+      "admissionId": "admission-1788099318037",
+      "admissionNumber": "SD/ADM/2026/0001",
+      "learnerName": "RAPHAEL GIKUNDI",
+      "className": "Grade 1 East",
+      "guardianName": "BETTY NTINYARI",
+      "guardianPhone": "254717089754",
+      "amount": 2000,
+      "paymentMethod": "M-Pesa",
+      "paymentReference": "GSHAJS2IEIK",
+      "issuedAt": "2026-08-30T17:48:30.336Z"
+    },
+    {
+      "id": "receipt-1788111663729",
+      "receiptNumber": "SD/RCT/2026/0001",
+      "admissionId": "admission-1788099142592",
+      "admissionNumber": "SD/ADM/2026/0002",
+      "learnerName": "RAPHAEL GIKUNDI",
+      "className": "Grade 3",
+      "guardianName": "BETTY NTINYARI",
+      "guardianPhone": "254717089754",
+      "amount": 2000,
+      "paymentMethod": "M-Pesa",
+      "paymentReference": "ggg",
+      "issuedAt": "2026-08-30T17:41:03.729Z"
+    }
+  ],
+  "mpesaTransactions": [
+    {
+      "id": "mpesa-1788112097306",
+      "transactionCode": "GSHAJS2IEIK",
+      "senderPhone": "254717089754",
+      "amount": 2000,
+      "receivedAt": "2026-08-30T17:48:17.306Z",
+      "status": "Matched",
+      "admissionId": "admission-1788099318037",
+      "admissionNumber": "SD/ADM/2026/0001",
+      "learnerName": "RAPHAEL GIKUNDI",
+      "className": "Grade 1 East",
+      "guardianName": "BETTY NTINYARI",
+      "reconciledAt": "2026-08-30T17:48:30.336Z",
+      "reconciledBy": "Bursar"
+    }
+  ],
+  "schoolClasses": [
+    {
+      "id": "class-migrated-placement-1788101285841",
+      "className": "Grade 1 Honest",
+      "grade": "Grade 1",
+      "stream": "Honest",
+      "academicYear": "2026",
+      "capacity": 35,
+      "classTeacher": "",
+      "status": "Active",
+      "createdAt": "2026-08-30T14:48:05.840Z",
+      "createdBy": "System migration",
+      "updatedAt": "2026-08-31T05:40:55.798Z",
+      "updatedBy": "Headteacher"
+    },
+    {
+      "id": "class-1788116562442",
+      "className": "Grade 2 East",
+      "grade": "Grade 2",
+      "stream": "East",
+      "academicYear": "2026",
+      "capacity": 40,
+      "classTeacher": "Mr Joseph",
+      "status": "Active",
+      "createdAt": "2026-08-30T19:02:42.442Z",
+      "createdBy": "Administrator"
+    },
+    {
+      "id": "class-1788116625612",
+      "className": "Grade 3 West",
+      "grade": "Grade 3",
+      "stream": "West",
+      "academicYear": "2026",
+      "capacity": 40,
+      "classTeacher": "Mr Tom",
+      "status": "Active",
+      "createdAt": "2026-08-30T19:03:45.612Z",
+      "createdBy": "Administrator"
+    },
+    {
+      "id": "class-1788116721928",
+      "className": "Grade 3 East",
+      "grade": "Grade 3",
+      "stream": "East",
+      "academicYear": "2026",
+      "capacity": 35,
+      "classTeacher": "Mr BOB",
+      "status": "Active",
+      "createdAt": "2026-08-30T19:05:21.928Z",
+      "createdBy": "Administrator"
+    },
+    {
+      "id": "class-1788159418641",
+      "className": "Grade 4 Obedient",
+      "grade": "Grade 4",
+      "stream": "Obedient",
+      "academicYear": "2026",
+      "capacity": 35,
+      "classTeacher": "Betty",
+      "status": "Active",
+      "createdAt": "2026-08-31T06:56:58.642Z",
+      "createdBy": "Administrator"
+    }
+  ],
+  "staff": [],
+  "subjects": [],
+  "teacherAssignments": [],
+  "timetableEntries": [],
+  "attendanceRecords": [],
+  "assessments": [
+    {
+      "id": "assessment-1788118482528",
+      "className": "Grade 2 East",
+      "subjectName": "Maths",
+      "title": "cat 1",
+      "outOf": 100,
+      "term": "Term 3",
+      "academicYear": "2026",
+      "createdAt": "2026-08-30T19:34:42.528Z"
+    },
+    {
+      "id": "assessment-1788118547175",
+      "className": "Grade 1 Honest",
+      "subjectName": "Maths",
+      "title": "cat 2",
+      "outOf": 100,
+      "term": "Term 3",
+      "academicYear": "2026",
+      "createdAt": "2026-08-30T19:35:47.175Z"
+    }
+  ],
+  "assessmentMarks": [
+    {
+      "id": "mark-assessment-1788118547175-admission-1788099318037",
+      "assessmentId": "assessment-1788118547175",
+      "admissionId": "admission-1788099318037",
+      "learnerName": "RAPHAEL GIKUNDI",
+      "className": "Grade 1 East",
+      "subjectName": "Maths",
+      "score": 68,
+      "outOf": 100,
+      "updatedAt": "2026-08-30T19:36:01.662Z"
+    }
+  ],
+  "feeStructures": [
+    {
+      "id": "fees-1788118071689",
+      "grade": "Grade 1",
+      "academicYear": "2026",
+      "term": "Term 1",
+      "amount": 20000,
+      "updatedAt": "2026-08-30T19:27:51.689Z",
+      "setBy": "Bursar"
+    },
+    {
+      "id": "fees-1788118081181",
+      "grade": "Grade 1",
+      "academicYear": "2026",
+      "term": "Term 2",
+      "amount": 15000,
+      "updatedAt": "2026-08-30T19:28:01.181Z",
+      "setBy": "Bursar"
+    },
+    {
+      "id": "fees-1788118088549",
+      "grade": "Grade 1",
+      "academicYear": "2026",
+      "term": "Term 3",
+      "amount": 12000,
+      "updatedAt": "2026-08-30T19:28:08.549Z",
+      "setBy": "Bursar"
+    },
+    {
+      "id": "fees-1788118103380",
+      "grade": "Grade 2",
+      "academicYear": "2026",
+      "term": "Term 1",
+      "amount": 21000,
+      "updatedAt": "2026-08-30T19:28:23.380Z",
+      "setBy": "Bursar"
+    },
+    {
+      "id": "fees-1788118109502",
+      "grade": "Grade 2",
+      "academicYear": "2026",
+      "term": "Term 2",
+      "amount": 17000,
+      "updatedAt": "2026-08-30T19:28:29.502Z",
+      "setBy": "Bursar"
+    },
+    {
+      "id": "fees-1788118116904",
+      "grade": "Grade 2",
+      "academicYear": "2026",
+      "term": "Term 3",
+      "amount": 13500,
+      "updatedAt": "2026-08-30T19:28:36.904Z",
+      "setBy": "Bursar"
+    }
+  ],
+  "leaveRequests": [],
+  "staffAttendance": [],
+  "promotions": [],
+  "documentRecords": [],
+  "notices": [
+    {
+      "id": "notice-1788153488834",
+      "title": "Closing dates",
+      "message": "We will be closing the school on date x for 2 months, there will be a party, kindly keep time",
+      "audience": "All parents and guardians",
+      "publishDate": "2026-08-31",
+      "status": "Published",
+      "showOnWebsite": true,
+      "createdAt": "2026-08-31T05:18:08.834Z",
+      "updatedAt": "2026-08-31T05:18:08.834Z"
+    },
+    {
+      "id": "notice-parents-meeting",
+      "title": "Parents’ Meeting — Grade 7",
+      "message": "Parents and guardians of Grade 7 learners are invited to a meeting in the school hall at 2:00 PM.",
+      "audience": "All parents and guardians",
+      "publishDate": "2026-05-30",
+      "status": "Published",
+      "createdAt": "2026-05-20T08:00:00.000Z",
+      "updatedAt": "2026-05-20T08:00:00.000Z",
+      "showOnWebsite": false
+    },
+    {
+      "id": "notice-midterm-break",
+      "title": "Mid-term Break",
+      "message": "The school will close for the mid-term break at 3:30 PM. Learners should report back on the communicated reopening date.",
+      "audience": "All portal users",
+      "publishDate": "2026-06-06",
+      "status": "Published",
+      "createdAt": "2026-05-21T08:00:00.000Z",
+      "updatedAt": "2026-05-21T08:00:00.000Z",
+      "showOnWebsite": true
+    },
+    {
+      "id": "notice-admissions",
+      "title": "New admission interview dates",
+      "message": "Parents with pending admission applications should contact the school office to confirm their interview or assessment appointment.",
+      "audience": "All parents and guardians",
+      "publishDate": "2026-06-02",
+      "status": "Draft",
+      "createdAt": "2026-05-22T08:00:00.000Z",
+      "updatedAt": "2026-05-22T08:00:00.000Z",
+      "showOnWebsite": false
+    }
+  ],
+  "internalMessages": [],
+  "accounts": [
+    {
+      "id": "account-headteacher",
+      "identifier": "headteacher@stdorothyschool.ac.ke",
+      "role": "headteacher",
+      "name": "Sr. Mary",
+      "title": "Headteacher",
+      "active": true,
+      "passwordSalt": "f214deaaf6e423d15fc8ed6b13a1231e",
+      "passwordHash": "e40c66dc809cd43bc016fa9f276509a766bf5789043810b28b36faf8c9a22b385ea6bfb902ce72b31034c8c7d8271b1d2edca99b8f6a46ed766c539d32ffb60f",
+      "createdAt": "2026-08-31T06:43:49.858Z",
+      "mustChangePassword": false,
+      "passwordChangedAt": "2026-09-02T15:37:11.395Z"
+    },
+    {
+      "id": "account-secretary",
+      "identifier": "secretary@stdorothyschool.ac.ke",
+      "role": "secretary",
+      "name": "Jane Mwangi",
+      "title": "School Secretary",
+      "active": true,
+      "passwordSalt": "3c974c9cbf5d8d782d618e38a140994a",
+      "passwordHash": "cfd41546fdabd338acb6446fb7d41880bf8b6edbc679987e81fcadeb7c2a12c26a21bc6bdaa6ce8e000b5797246501dad93ef6594a830a6b24f7257dd80051ad",
+      "createdAt": "2026-08-31T06:43:49.911Z",
+      "mustChangePassword": true
+    },
+    {
+      "id": "account-bursar",
+      "identifier": "bursar@stdorothyschool.ac.ke",
+      "role": "bursar",
+      "name": "Anne Njeri",
+      "title": "Bursar",
+      "active": true,
+      "passwordSalt": "8b51ec7c73e127f2f70cb34ce5536d8c",
+      "passwordHash": "987a3b9e02d62a0d07028839f8b3d3d19368077f3dfa269b568728b7730fcbcf0024fb37041e97a927e4431b65608ed6a073636b23cd93f6af93a23ecf5bb729",
+      "createdAt": "2026-08-31T06:43:49.963Z",
+      "mustChangePassword": true
+    },
+    {
+      "id": "account-teacher",
+      "identifier": "teacher@stdorothyschool.ac.ke",
+      "role": "teacher",
+      "name": "John Otieno",
+      "title": "Grade 7 teacher",
+      "active": true,
+      "passwordSalt": "d39932a1fbdc042cedf9eb9129d29c9d",
+      "passwordHash": "874ffde71084514cd55e4e137d356d485f5854275212d74c0101da69a2dbe18f0e2eaf09c88a8d6ae1753a2bbc8857dcf5c592659937ba545d30ca3f7a8a6fee",
+      "createdAt": "2026-08-31T06:43:50.016Z",
+      "mustChangePassword": false,
+      "passwordChangedAt": "2026-08-31T14:15:14.062Z"
+    },
+    {
+      "id": "account-parent-betty",
+      "identifier": "254717089754",
+      "role": "parent",
+      "name": "Betty Ntinyari",
+      "title": "Parent / Guardian",
+      "parentPhone": "254717089754",
+      "active": true,
+      "passwordSalt": "047baa23ab201e7ab770dbc169a6f4ff",
+      "passwordHash": "0eef2861b390564135f94f5bc874bb3f1ce00bfc5190b402147676a1add2405fc3cfd30afbf069e8d4f5f8f2c79d015c51093b9a4a935bdf01065f23ef868802",
+      "createdAt": "2026-08-31T06:43:50.065Z",
+      "mustChangePassword": false,
+      "passwordChangedAt": "2026-09-02T17:44:53.906Z"
+    },
+    {
+      "id": "account-system-admin",
+      "identifier": "system-admin@stdorothyschool.ac.ke",
+      "role": "system-admin",
+      "name": "System Administrator",
+      "title": "Technical administration",
+      "active": true,
+      "passwordSalt": "5b558637b725e2f9bf30c43e759676aa",
+      "passwordHash": "43f50152d2dc5f8f7554d2379a1ed73c9dc6f31a17972677a34c43d23337303901b647d1d756abf3e576aaa9ded42c9d8979e296e60893964cb70b9e41e398e4",
+      "createdAt": "2026-09-02T15:47:18.474Z",
+      "mustChangePassword": false,
+      "passwordChangedAt": "2026-09-02T15:51:11.012Z"
+    }
+  ],
+  "parentMessages": [
+    {
+      "id": "parent-message-1788162030151",
+      "parentPhone": "254717089754",
+      "guardianName": "BETTY NTINYARI",
+      "admissionId": "admission-1788099318037",
+      "admissionNumber": "SD/ADM/2026/0001",
+      "learnerName": "RAPHAEL GIKUNDI",
+      "className": "Grade 1 Honest",
+      "recipient": "Class teacher",
+      "subject": "Absence",
+      "body": "child is sick",
+      "status": "New",
+      "createdAt": "2026-08-31T07:40:30.151Z"
+    }
+  ],
+  "lessonPlans": [],
+  "accountAudit": []
+}
