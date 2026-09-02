@@ -12,7 +12,7 @@ The live St. Dorothy portal requires PostgreSQL. Its `DATABASE_URL` is the only 
 3. Start PostgreSQL: `docker compose up -d postgres`.
 4. Start the API: `npm run server`.
 
-On the first PostgreSQL connection, the server creates `school_portal_state` and imports the current local prototype data from `server/data/school-data.json`. It will not overwrite an existing database.
+On the first PostgreSQL connection, the server creates `school_portal_state` and imports the current local prototype data from `backend/data/school-data.json`. It will not overwrite an existing database.
 
 ## Production
 

@@ -5,7 +5,7 @@ import { SpreadsheetFile, Workbook } from '@oai/artifact-tool'
 const workspace = 'C:\\Users\\raphg\\Documents\\Codex\\2026-08-26\\goo'
 const outputDir = path.join(workspace, 'outputs', '01a03f7c-d568-7f21-a80f-279d6f99324f')
 const outputPath = path.join(outputDir, 'st_dorothy_financial_report.xlsx')
-const sourcePath = path.join(workspace, 'server', 'data', 'school-data.json')
+const sourcePath = path.join(workspace, 'backend', 'data', 'school-data.json')
 const data = JSON.parse(await fs.readFile(sourcePath, 'utf8'))
 const receipts = data.receipts ?? []
 const transactions = data.mpesaTransactions ?? []

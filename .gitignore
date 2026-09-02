@@ -1,5 +1,7 @@
 node_modules/
 dist/
 .env
-server/uploads/
+.env.production
+backend/uploads/
 outputs/attendance-registers/
+frontend/dist/

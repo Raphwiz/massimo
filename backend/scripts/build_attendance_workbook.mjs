@@ -4,14 +4,14 @@ import { fileURLToPath } from 'node:url'
 import { SpreadsheetFile, Workbook } from '@oai/artifact-tool'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
-const root = path.dirname(here)
+const backendRoot = path.dirname(here)
 const args = Object.fromEntries(process.argv.slice(2).reduce((pairs, item, index, values) => item.startsWith('--') ? [...pairs, [item.slice(2), values[index + 1]]] : pairs, []))
 const className = String(args.className || '').trim()
 const date = String(args.date || '').trim()
 const outputPath = String(args.output || '').trim()
 if (!className || !/^\d{4}-\d{2}-\d{2}$/.test(date) || !outputPath) throw new Error('A class name, YYYY-MM-DD date, and output path are required.')
 
-const sourcePath = args.source ? path.resolve(String(args.source)) : path.join(root, 'server', 'data', 'school-data.json')
+const sourcePath = args.source ? path.resolve(String(args.source)) : path.join(backendRoot, 'data', 'school-data.json')
 const data = JSON.parse(await fs.readFile(sourcePath, 'utf8'))
 const admissionById = new Map((data.admissions || []).map(item => [item.id, item]))
 const records = (data.attendanceRecords || []).filter(item => item.className === className && item.date === date).sort((a, b) => a.learnerName.localeCompare(b.learnerName))

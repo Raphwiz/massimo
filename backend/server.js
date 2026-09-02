@@ -1,24 +1,22 @@
 import { createServer } from 'node:http'
 import 'dotenv/config'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
-import { execFile } from 'node:child_process'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { randomBytes, randomInt, scryptSync, timingSafeEqual } from 'node:crypto'
-import { promisify } from 'node:util'
 import pg from 'pg'
+import ExcelJS from 'exceljs'
 
-const root = dirname(fileURLToPath(import.meta.url))
-const dataFile = join(root, 'server', 'data', 'school-data.json')
-const databaseUrl = process.env.DATABASE_URL
+const backendRoot = dirname(fileURLToPath(import.meta.url))
+const root = dirname(backendRoot)
+const dataFile = join(backendRoot, 'data', 'school-data.json')
+const configuredDatabaseUrl = String(process.env.DATABASE_URL || '').trim()
+const databaseUrl = configuredDatabaseUrl && !['database-host', 'replace-with-a-long-unique-password'].some(placeholder => configuredDatabaseUrl.includes(placeholder)) ? configuredDatabaseUrl : ''
 const { Pool } = pg
 const database = databaseUrl ? new Pool({ connectionString: databaseUrl, ssl: process.env.DATABASE_SSL === 'true' ? { rejectUnauthorized: false } : undefined }) : null
 let databaseReady = false
-const documentUploadDirectory = join(root, 'server', 'uploads', 'learner-documents')
+const documentUploadDirectory = join(backendRoot, 'uploads', 'learner-documents')
 const reportWorkbookFile = join(root, 'outputs', '01a03f7c-d568-7f21-a80f-279d6f99324f', 'st_dorothy_financial_report.xlsx')
-const attendanceWorkbookBuilder = join(root, 'spreadsheet-work', 'build_attendance_workbook.mjs')
-const attendanceWorkbookDirectory = join(root, 'outputs', 'attendance-registers')
-const execFileAsync = promisify(execFile)
 const port = Number(process.env.PORT || 8787)
 const isProduction = process.env.NODE_ENV === 'production'
 const allowedOrigins = new Set((process.env.ALLOWED_ORIGINS || 'http://127.0.0.1:4173,http://localhost:4173').split(',').map(item => item.trim()).filter(Boolean))
@@ -339,7 +337,7 @@ function decodeDocumentContent(value) {
   return { mimeType: match[1], content }
 }
 
-function documentForClient(data, record) {
+function documentForClient(data, record, request) {
   const learner = data.admissions.find(item => item.id === record.admissionId)
   return {
     id: record.id,
@@ -351,7 +349,7 @@ function documentForClient(data, record) {
     receivedDate: record.receivedDate,
     status: record.status,
     uploadedAt: record.uploadedAt,
-    downloadUrl: `http://127.0.0.1:${port}/api/documents/${encodeURIComponent(record.id)}/download`
+    downloadUrl: `${String(request.headers['x-forwarded-proto'] || (isProduction ? 'https' : 'http')).split(',')[0]}://${request.headers.host || `127.0.0.1:${port}`}/api/documents/${encodeURIComponent(record.id)}/download`
   }
 }
 
@@ -602,7 +600,7 @@ const server = createServer(async (request, response) => {
       if (noticesAdded || noticeFieldsAdded) await saveData(data)
       return send(response, 200, data.notices.filter(item => item.status === 'Published' && item.showOnWebsite).sort((a, b) => b.publishDate.localeCompare(a.publishDate)).slice(0, 4))
     }
-    if (request.method === 'GET' && url.pathname === '/api/documents') return send(response, 200, data.documentRecords.map(record => documentForClient(data, record)).sort((a, b) => b.uploadedAt.localeCompare(a.uploadedAt)))
+    if (request.method === 'GET' && url.pathname === '/api/documents') return send(response, 200, data.documentRecords.map(record => documentForClient(data, record, request)).sort((a, b) => b.uploadedAt.localeCompare(a.uploadedAt)))
     if (request.method === 'GET' && /^\/api\/documents\/[^/]+\/download$/.test(url.pathname)) {
       const id = decodeURIComponent(url.pathname.slice('/api/documents/'.length, -'/download'.length))
       const record = data.documentRecords.find(item => item.id === id)
@@ -647,15 +645,49 @@ const server = createServer(async (request, response) => {
       if (!className || !/^\d{4}-\d{2}-\d{2}$/.test(date) || !hasRecords) return send(response, 400, { error: 'Save attendance for the selected class and date before downloading the Excel register.' })
       const safeClass = className.replace(/[^a-zA-Z0-9]+/g, '_').replace(/^_|_$/g, '')
       const fileName = `st_dorothy_attendance_${safeClass}_${date}.xlsx`
-      const outputPath = join(attendanceWorkbookDirectory, fileName)
-      await mkdir(attendanceWorkbookDirectory, { recursive: true })
-      await execFileAsync(process.execPath, [attendanceWorkbookBuilder, '--className', className, '--date', date, '--output', outputPath], { cwd: join(root, 'spreadsheet-work') })
-      const workbook = await readFile(outputPath)
+      const records = data.attendanceRecords.filter(item => item.className === className && item.date === date).sort((a, b) => a.learnerName.localeCompare(b.learnerName))
+      const admissionById = new Map(data.admissions.map(item => [item.id, item]))
+      const workbook = new ExcelJS.Workbook()
+      workbook.creator = 'St. Dorothy School Massimo'
+      workbook.created = new Date()
+      const sheet = workbook.addWorksheet('Attendance Register', { views: [{ state: 'frozen', ySplit: 5 }] })
+      sheet.columns = [{ width: 8 }, { width: 22 }, { width: 30 }, { width: 20 }, { width: 38 }, { width: 23 }]
+      sheet.mergeCells('A1:F1')
+      sheet.getCell('A1').value = "St. Dorothy's School Massimo — Attendance Register"
+      sheet.getCell('A1').font = { name: 'Aptos Display', size: 16, bold: true, color: { argb: 'FFFFFFFF' } }
+      sheet.getCell('A1').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF173B6B' } }
+      sheet.getRow(1).height = 30
+      sheet.mergeCells('A2:F2')
+      sheet.getCell('A2').value = `Class: ${className}  |  Date: ${date}  |  Exported ${new Date().toLocaleString('en-KE')}`
+      sheet.getCell('A2').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEDF5FF' } }
+      sheet.getCell('A2').font = { italic: true, color: { argb: 'FF173B6B' } }
+      sheet.addRow([])
+      const summary = sheet.addRow(['Registered learners', 'Present / Late', 'Absent', 'Excused', 'Attendance rate', 'Exported at'])
+      const present = records.filter(item => ['Present', 'Late'].includes(item.status)).length
+      const absent = records.filter(item => item.status === 'Absent').length
+      const excused = records.filter(item => item.status === 'Excused').length
+      sheet.addRow([records.length, present, absent, excused, records.length ? present / records.length : 0, new Date()])
+      sheet.getCell('E5').numFmt = '0%'
+      sheet.getCell('F5').numFmt = 'yyyy-mm-dd hh:mm'
+      sheet.addRow([])
+      const header = sheet.addRow(['No.', 'Admission number', 'Learner name', 'Attendance status', 'Reason / note', 'Marked at'])
+      for (const row of [summary, header]) {
+        row.font = { bold: true, color: { argb: 'FFFFFFFF' } }
+        row.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true }
+        row.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: row === header ? 'FF2B72C8' : 'FF173B6B' } }
+      }
+      for (const [index, record] of records.entries()) {
+        const row = sheet.addRow([index + 1, admissionById.get(record.admissionId)?.admissionNumber || '', record.learnerName, record.status, record.reason || '', new Date(record.markedAt)])
+        row.getCell(6).numFmt = 'yyyy-mm-dd hh:mm'
+        row.alignment = { vertical: 'center', wrapText: true }
+      }
+      sheet.eachRow(row => row.eachCell(cell => { cell.border = { top: { style: 'thin', color: { argb: 'FFDCE5EF' } }, left: { style: 'thin', color: { argb: 'FFDCE5EF' } }, bottom: { style: 'thin', color: { argb: 'FFDCE5EF' } }, right: { style: 'thin', color: { argb: 'FFDCE5EF' } } } }))
+      const workbookBytes = await workbook.xlsx.writeBuffer()
       response.writeHead(200, {
         'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         'Content-Disposition': `attachment; filename="${fileName}"`
       })
-      return response.end(workbook)
+      return response.end(Buffer.from(workbookBytes))
     }
     if (request.method === 'GET' && url.pathname === '/api/assessment-marks') {
       const assessmentId = text(url.searchParams.get('assessmentId'), 80)
@@ -1320,4 +1352,5 @@ const server = createServer(async (request, response) => {
   }
 })
 
-server.listen(port, '127.0.0.1', () => console.log(`St. Dorothy API running at http://127.0.0.1:${port}`))
+const host = process.env.HOST || '127.0.0.1'
+server.listen(port, host, () => console.log(`St. Dorothy API running at http://${host}:${port}`))

@@ -10,6 +10,7 @@ const securityHeaders = {
 }
 
 export default defineConfig({
+  build: { outDir: 'dist', emptyOutDir: true },
   plugins: [react()],
   server: {
     headers: securityHeaders,
