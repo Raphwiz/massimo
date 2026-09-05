@@ -20,6 +20,10 @@ const reportWorkbookFile = join(root, 'outputs', '01a03f7c-d568-7f21-a80f-279d6f
 const port = Number(process.env.PORT || 8787)
 const isProduction = process.env.NODE_ENV === 'production'
 const allowedOrigins = new Set((process.env.ALLOWED_ORIGINS || 'http://127.0.0.1:4173,http://localhost:4173').split(',').map(item => item.trim()).filter(Boolean))
+if (!isProduction) {
+  allowedOrigins.add('http://127.0.0.1:4173')
+  allowedOrigins.add('http://localhost:4173')
+}
 const sessionCookieName = 'st_dorothy_portal_session'
 const sessionDurationMs = 8 * 60 * 60 * 1000
 const sessions = new Map()
@@ -155,7 +159,13 @@ function parseCookies(request) {
   return Object.fromEntries(String(request.headers.cookie || '').split(';').map(item => item.trim()).filter(Boolean).map(item => { const index = item.indexOf('='); return index < 0 ? [item, ''] : [item.slice(0, index), decodeURIComponent(item.slice(index + 1))] }))
 }
 
-function requestIp(request) { return request.socket.remoteAddress || 'unknown' }
+function requestIp(request) {
+  // The production Nginx proxy passes the visitor address here. Without this,
+  // every visitor appears to come from the frontend container and shares one
+  // sign-in limit.
+  const forwarded = String(request.headers['x-forwarded-for'] || '').split(',')[0].trim()
+  return forwarded || request.socket.remoteAddress || 'unknown'
+}
 
 function rateLimited(request, key, limit, windowMs) {
   const now = Date.now()
@@ -165,6 +175,26 @@ function rateLimited(request, key, limit, windowMs) {
   attempts.push(now)
   rateBuckets.set(bucketKey, attempts)
   return false
+}
+
+function signInRateLimited(request, key, limit, windowMs) {
+  const now = Date.now()
+  const bucketKey = `${requestIp(request)}:${key}`
+  const attempts = (rateBuckets.get(bucketKey) || []).filter(timestamp => now - timestamp < windowMs)
+  rateBuckets.set(bucketKey, attempts)
+  return attempts.length >= limit
+}
+
+function recordFailedAttempt(request, key, windowMs) {
+  const now = Date.now()
+  const bucketKey = `${requestIp(request)}:${key}`
+  const attempts = (rateBuckets.get(bucketKey) || []).filter(timestamp => now - timestamp < windowMs)
+  attempts.push(now)
+  rateBuckets.set(bucketKey, attempts)
+}
+
+function clearAttempts(request, key) {
+  rateBuckets.delete(`${requestIp(request)}:${key}`)
 }
 
 function createSession(response, account) {
@@ -493,25 +523,33 @@ const server = createServer(async (request, response) => {
 
     if (request.method === 'GET' && url.pathname === '/api/health') return send(response, 200, { status: 'ok' })
     if (request.method === 'POST' && url.pathname === '/api/auth/login') {
-      if (rateLimited(request, 'login', 8, 15 * 60_000)) return send(response, 429, { error: 'Too many sign-in attempts. Please wait 15 minutes before trying again.' })
+      if (signInRateLimited(request, 'login', 8, 15 * 60_000)) return send(response, 429, { error: 'Too many sign-in attempts. Please wait 15 minutes before trying again.' })
       const input = await body(request)
       const portal = text(input.portal, 12)
       const identifier = portal === 'parent' ? normalisePhone(input.identifier) : text(input.identifier, 120).toLowerCase()
       const password = typeof input.password === 'string' ? input.password : ''
       const account = data.accounts.find(item => item.identifier === identifier && item.active !== false)
-      if (!account || !password || !verifyPassword(password, account) || (portal === 'parent' && account.role !== 'parent') || (portal === 'staff' && (account.role === 'parent' || account.role === 'system-admin')) || (portal === 'system-admin' && account.role !== 'system-admin')) return send(response, 401, { error: 'The sign-in details are not recognised. Please try again or contact the school office.' })
+      if (!account || !password || !verifyPassword(password, account) || (portal === 'parent' && account.role !== 'parent') || (portal === 'staff' && (account.role === 'parent' || account.role === 'system-admin')) || (portal === 'system-admin' && account.role !== 'system-admin')) {
+        recordFailedAttempt(request, 'login', 15 * 60_000)
+        return send(response, 401, { error: 'The sign-in details are not recognised. Please try again or contact the school office.' })
+      }
+      clearAttempts(request, 'login')
       createSession(response, account)
       return send(response, 200, { role: account.role, name: account.name, title: account.title, parentPhone: account.parentPhone || '', mustChangePassword: Boolean(account.mustChangePassword) })
     }
     if (request.method === 'POST' && url.pathname === '/api/auth/activate') {
-      if (rateLimited(request, 'activation', 8, 15 * 60_000)) return send(response, 429, { error: 'Too many activation attempts. Please wait 15 minutes before trying again.' })
+      if (signInRateLimited(request, 'activation', 8, 15 * 60_000)) return send(response, 429, { error: 'Too many activation attempts. Please wait 15 minutes before trying again.' })
       const input = await body(request)
       const rawIdentifier = text(input.identifier, 120)
       const identifier = rawIdentifier.includes('@') ? rawIdentifier.toLowerCase() : normalisePhone(rawIdentifier)
       const code = text(input.code, 16)
       const newPassword = typeof input.newPassword === 'string' ? input.newPassword : ''
       const account = data.accounts.find(item => item.identifier === identifier && item.active !== false)
-      if (!account || !verifyActivationCode(code, account)) return send(response, 400, { error: 'The activation details are not recognised or the code has expired.' })
+      if (!account || !verifyActivationCode(code, account)) {
+        recordFailedAttempt(request, 'activation', 15 * 60_000)
+        return send(response, 400, { error: 'The activation details are not recognised or the code has expired.' })
+      }
+      clearAttempts(request, 'activation')
       if (!validPassword(newPassword)) return send(response, 400, { error: 'Use at least 12 characters with upper- and lower-case letters, a number, and a symbol.' })
       const updatedAccount = { ...account, ...createPasswordHash(newPassword), mustChangePassword: false, activatedAt: new Date().toISOString(), passwordChangedAt: new Date().toISOString() }
       delete updatedAccount.activationCodeHash
