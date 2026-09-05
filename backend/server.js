@@ -6,6 +6,8 @@ import { fileURLToPath } from 'node:url'
 import { randomBytes, randomInt, scryptSync, timingSafeEqual } from 'node:crypto'
 import pg from 'pg'
 import ExcelJS from 'exceljs'
+import PDFDocument from 'pdfkit'
+import { ZipArchive } from 'archiver'
 
 const backendRoot = dirname(fileURLToPath(import.meta.url))
 const root = dirname(backendRoot)
@@ -17,6 +19,7 @@ const database = databaseUrl ? new Pool({ connectionString: databaseUrl, ssl: pr
 let databaseReady = false
 const documentUploadDirectory = join(backendRoot, 'uploads', 'learner-documents')
 const reportWorkbookFile = join(root, 'outputs', '01a03f7c-d568-7f21-a80f-279d6f99324f', 'st_dorothy_financial_report.xlsx')
+const crestPath = join(root, 'frontend', 'public', 'assets', 'st-dorothy-crest-refined.png')
 const port = Number(process.env.PORT || 8787)
 const isProduction = process.env.NODE_ENV === 'production'
 const allowedOrigins = new Set((process.env.ALLOWED_ORIGINS || 'http://127.0.0.1:4173,http://localhost:4173').split(',').map(item => item.trim()).filter(Boolean))
@@ -24,7 +27,7 @@ if (!isProduction) {
   allowedOrigins.add('http://127.0.0.1:4173')
   allowedOrigins.add('http://localhost:4173')
 }
-const sessionCookieName = 'st_dorothy_portal_session'
+const sessionCookiePrefix = 'st_dorothy_portal_'
 const sessionDurationMs = 8 * 60 * 60 * 1000
 const sessions = new Map()
 const rateBuckets = new Map()
@@ -151,7 +154,7 @@ function applySecurityHeaders(request, response) {
     response.setHeader('Access-Control-Allow-Origin', origin)
     response.setHeader('Access-Control-Allow-Credentials', 'true')
     response.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
-    response.setHeader('Access-Control-Allow-Headers', 'Content-Type')
+    response.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Portal-Role')
   }
 }
 
@@ -197,24 +200,35 @@ function clearAttempts(request, key) {
   rateBuckets.delete(`${requestIp(request)}:${key}`)
 }
 
+function sessionCookieNameForRole(role) { return `${sessionCookiePrefix}${String(role || '').replace(/[^a-z-]/g, '')}_session` }
+
+function requestedSessionRole(request) {
+  const role = String(request.headers['x-portal-role'] || '').trim()
+  return ['system-admin', 'headteacher', 'secretary', 'teacher', 'bursar', 'parent'].includes(role) ? role : ''
+}
+
 function createSession(response, account) {
   const token = randomBytes(32).toString('base64url')
   sessions.set(token, { accountId: account.id, expiresAt: Date.now() + sessionDurationMs })
-  const cookie = [`${sessionCookieName}=${token}`, 'HttpOnly', 'SameSite=Lax', 'Path=/', `Max-Age=${Math.floor(sessionDurationMs / 1000)}`]
+  const cookie = [`${sessionCookieNameForRole(account.role)}=${token}`, 'HttpOnly', 'SameSite=Lax', 'Path=/', `Max-Age=${Math.floor(sessionDurationMs / 1000)}`]
   if (isProduction) cookie.push('Secure')
   response.setHeader('Set-Cookie', cookie.join('; '))
 }
 
-function clearSession(response) {
-  response.setHeader('Set-Cookie', `${sessionCookieName}=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0${isProduction ? '; Secure' : ''}`)
+function clearSession(request, response) {
+  const role = requestedSessionRole(request)
+  response.setHeader('Set-Cookie', `${sessionCookieNameForRole(role)}=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0${isProduction ? '; Secure' : ''}`)
 }
 
 function sessionAccount(request, data) {
-  const token = parseCookies(request)[sessionCookieName]
+  const cookies = parseCookies(request)
+  const role = requestedSessionRole(request)
+  const namedTokens = role ? [cookies[sessionCookieNameForRole(role)]] : Object.entries(cookies).filter(([name]) => name.startsWith(sessionCookiePrefix)).map(([, token]) => token)
+  const token = namedTokens.filter(Boolean)[0]
   const session = token && sessions.get(token)
   if (!session || session.expiresAt <= Date.now()) { if (token) sessions.delete(token); return null }
   const account = data.accounts.find(item => item.id === session.accountId && item.active !== false)
-  if (!account) { sessions.delete(token); return null }
+  if (!account || (role && account.role !== role)) { sessions.delete(token); return null }
   return account
 }
 
@@ -222,6 +236,7 @@ function routeRoles(method, path) {
   if ((method === 'GET' && ['/api/health', '/api/public/notices', '/api/calendar-events'].includes(path)) || (method === 'POST' && (path === '/api/auth/login' || path === '/api/auth/activate' || path === '/api/admission-enquiries'))) return null
   if (method === 'POST' && path === '/api/auth/logout') return ['system-admin', 'headteacher', 'secretary', 'teacher', 'bursar', 'parent']
   if (method === 'POST' && path === '/api/auth/change-password') return ['system-admin', 'headteacher', 'secretary', 'teacher', 'bursar', 'parent']
+  if (method === 'GET' && path === '/api/auth/session') return ['system-admin', 'headteacher', 'secretary', 'teacher', 'bursar', 'parent']
   if (path === '/api/system-admin/overview') return ['system-admin']
   if (path === '/api/accounts' || path.startsWith('/api/accounts/')) return ['system-admin', 'headteacher']
   if (path.startsWith('/api/finance/')) return ['bursar']
@@ -237,6 +252,8 @@ function routeRoles(method, path) {
   if (path === '/api/school-classes') return method === 'GET' ? ['headteacher', 'secretary', 'teacher'] : ['headteacher']
   if (path.startsWith('/api/school-classes/')) return ['headteacher']
   if (path === '/api/class-placements') return ['headteacher', 'secretary']
+  if (path === '/api/class-lists/workbook') return ['secretary', 'teacher']
+  if (path === '/api/staff-list/workbook') return ['secretary']
   if (path === '/api/staff' || path === '/api/staff-attendance' || path === '/api/promotions') return ['headteacher']
   if (path === '/api/academics') return ['headteacher', 'teacher']
   if (['/api/subjects', '/api/teacher-assignments', '/api/timetable'].includes(path)) return ['headteacher']
@@ -441,6 +458,25 @@ function currentFeeSummary(data, application) {
   return { feeDue, totalPaid, balance: feeDue === null ? null : Math.max(0, feeDue - totalPaid), term: structure ? `${structure.term} ${structure.academicYear}` : null }
 }
 
+const money = value => `KES ${Number(value || 0).toLocaleString('en-KE')}`
+const safePdfName = value => String(value || 'learner').replace(/[^a-z0-9_-]+/gi, '_').replace(/^_+|_+$/g, '')
+async function createFeeStatementPdf(data, learner) {
+  const finance = currentFeeSummary(data, learner); const receipts = data.receipts.filter(item => item.admissionId === learner.id).slice().sort((a, b) => String(a.issuedAt).localeCompare(String(b.issuedAt)))
+  const statementNumber = `SD/STM/${new Date().getFullYear()}/${learner.admissionNumber || learner.id}`; const generatedAt = new Date(); const payBy = new Date(generatedAt); payBy.setDate(payBy.getDate() + 14)
+  const chunks = []; const document = new PDFDocument({ size: 'A4', margin: 42 }); document.on('data', chunk => chunks.push(chunk))
+  const finished = new Promise((resolve, reject) => { document.on('end', () => resolve(Buffer.concat(chunks))); document.on('error', reject) })
+  try { document.image(await readFile(crestPath), 42, 36, { fit: [54, 54] }) } catch { /* Statement remains valid without its crest. */ }
+  document.fillColor('#173662').fontSize(17).font('Helvetica-Bold').text("ST. DOROTHY'S SCHOOL MASSIMO", 108, 42); document.fontSize(8.5).font('Helvetica').text('P.O. Box 36-60607, Mikinduri, Meru, Kenya | +254 722 841 569 | stdorothysschoolmassimo@gmail.com', 108, 66); document.moveTo(42, 100).lineTo(553, 100).stroke('#1D5EAA')
+  document.fillColor('#173662').fontSize(15).font('Helvetica-Bold').text('FEE STATEMENT', 42, 116); document.fontSize(8.5).font('Helvetica').fillColor('#536b84').text(`Statement No: ${statementNumber}`, 42, 138).text(`Generated: ${generatedAt.toLocaleString('en-KE')} | Statement period: ${finance.term || 'Current placement period'}`, 42, 151)
+  document.fillColor('#173662').fontSize(10).font('Helvetica-Bold').text('Learner and guardian', 42, 180); document.font('Helvetica').fontSize(9).text(`Learner: ${learner.learnerName}`, 42, 198).text(`Admission number: ${learner.admissionNumber || 'Pending'}    Grade/Class: ${learner.placement?.className || learner.grade}`, 42, 212).text(`Guardian: ${learner.guardianName || 'Not recorded'}    Phone: ${learner.guardianPhone || 'Not recorded'}`, 42, 226)
+  document.fillColor('#173662').font('Helvetica-Bold').fontSize(10).text('Account summary', 42, 258); document.font('Helvetica').fontSize(9).text(`Fee charged: ${finance.feeDue === null ? 'Fee plan pending' : money(finance.feeDue)}`, 42, 277).text(`Discounts / bursaries: ${money(0)} (none recorded)`, 42, 291).text(`Recorded payments: ${money(finance.totalPaid)}`, 42, 305); document.fillColor('#933B3B').font('Helvetica-Bold').fontSize(13).text(`Outstanding balance: ${finance.balance === null ? 'Fee plan pending' : money(finance.balance)}`, 42, 328)
+  document.fillColor('#173662').fontSize(10).text('Recorded payments and receipt references', 42, 360); document.font('Helvetica-Bold').fontSize(8).text('DATE', 42, 380).text('RECEIPT / REFERENCE', 125, 380).text('METHOD', 315, 380).text('AMOUNT', 440, 380); document.moveTo(42, 392).lineTo(553, 392).stroke('#B8C9DA'); document.font('Helvetica').fontSize(8)
+  let y = 403; if (!receipts.length) document.text('No confirmed payments recorded for this learner.', 42, y)
+  receipts.slice(0, 12).forEach(receipt => { document.text(String(receipt.issuedAt || '').slice(0, 10), 42, y).text(`${receipt.receiptNumber || ''}${receipt.paymentReference ? ` / ${receipt.paymentReference}` : ''}`, 125, y, { width: 180 }).text(receipt.paymentMethod || '', 315, y).text(money(receipt.amount), 440, y); y += 16 })
+  const guidanceY = Math.max(y + 24, 455); document.fillColor('#173662').font('Helvetica-Bold').fontSize(10).text(`Payment guidance - Pay by ${payBy.toLocaleDateString('en-KE')}`, 42, guidanceY); document.font('Helvetica').fontSize(8.5).text('Use the learner name and grade as your account reference. Retain the payment confirmation for reconciliation.', 42, guidanceY + 16, { width: 500 }); document.font('Helvetica-Bold').fontSize(9).text('Official payment channels', 42, guidanceY + 42); document.font('Helvetica').fontSize(8.5).text('Equity Paybill 247247 - Account 803434#Learner Name/Grade', 42, guidanceY + 57).text('DTB Paybill 516600 - Account 808616#Learner Name/Grade', 42, guidanceY + 71).text('Trans Nation Paybill 507900 - Account 9000482#Learner Name/Grade', 42, guidanceY + 85).text('Bank: Equity Bank Meru A/C 0140296813439 | DTB Bank Meru A/C 0259364001', 42, guidanceY + 99, { width: 500 }).text('For help, contact the Bursar on +254 722 841 569.', 42, guidanceY + 113)
+  document.fillColor('#536b84').fontSize(7.5).text('This is a computer-generated private fee statement. It is intended only for the learner’s parent or guardian.', 42, 760, { align: 'center', width: 510 }); document.end(); return finished
+}
+
 function learnerAttendanceSummary(data, admissionId) {
   const records = data.attendanceRecords.filter(item => item.admissionId === admissionId)
   const present = records.filter(item => item.status === 'Present' || item.status === 'Late').length
@@ -535,8 +571,9 @@ const server = createServer(async (request, response) => {
       }
       clearAttempts(request, 'login')
       createSession(response, account)
-      return send(response, 200, { role: account.role, name: account.name, title: account.title, parentPhone: account.parentPhone || '', mustChangePassword: Boolean(account.mustChangePassword) })
+      return send(response, 200, { id: account.id, role: account.role, name: account.name, title: account.title, parentPhone: account.parentPhone || '', mustChangePassword: Boolean(account.mustChangePassword) })
     }
+    if (request.method === 'GET' && url.pathname === '/api/auth/session') return send(response, 200, { id: request.account.id, role: request.account.role, name: request.account.name, title: request.account.title || '', parentPhone: request.account.parentPhone || '', mustChangePassword: Boolean(request.account.mustChangePassword) })
     if (request.method === 'POST' && url.pathname === '/api/auth/activate') {
       if (signInRateLimited(request, 'activation', 8, 15 * 60_000)) return send(response, 429, { error: 'Too many activation attempts. Please wait 15 minutes before trying again.' })
       const input = await body(request)
@@ -562,9 +599,9 @@ const server = createServer(async (request, response) => {
       return send(response, 200, { role: updatedAccount.role, name: updatedAccount.name, title: updatedAccount.title, parentPhone: updatedAccount.parentPhone || '', mustChangePassword: false })
     }
     if (request.method === 'POST' && url.pathname === '/api/auth/logout') {
-      const token = parseCookies(request)[sessionCookieName]
+      const token = parseCookies(request)[sessionCookieNameForRole(requestedSessionRole(request))]
       if (token) sessions.delete(token)
-      clearSession(response)
+      clearSession(request, response)
       return send(response, 200, { status: 'signed out' })
     }
     if (request.method === 'POST' && url.pathname === '/api/auth/change-password') {
@@ -576,7 +613,7 @@ const server = createServer(async (request, response) => {
       if (currentPassword === newPassword) return send(response, 400, { error: 'Choose a new password that differs from the current password.' })
       const updatedAccount = { ...request.account, ...createPasswordHash(newPassword), mustChangePassword: false, passwordChangedAt: new Date().toISOString() }
       data.accounts = data.accounts.map(account => account.id === updatedAccount.id ? updatedAccount : account)
-      for (const [token, session] of sessions) if (session.accountId === updatedAccount.id && token !== parseCookies(request)[sessionCookieName]) sessions.delete(token)
+      for (const [token, session] of sessions) if (session.accountId === updatedAccount.id && token !== parseCookies(request)[sessionCookieNameForRole(requestedSessionRole(request))]) sessions.delete(token)
       await saveData(data)
       return send(response, 200, { status: 'password updated' })
     }
@@ -621,6 +658,18 @@ const server = createServer(async (request, response) => {
       if (!updatedAccount.active) for (const [token, session] of sessions) if (session.accountId === id) sessions.delete(token)
       await saveData(data)
       return send(response, 200, { account: portalAccountForClient(updatedAccount) })
+    }
+    if (request.method === 'DELETE' && /^\/api\/accounts\/[^/]+$/.test(url.pathname)) {
+      if (request.account.role !== 'system-admin') return send(response, 403, { error: 'Only the System Administrator can remove a portal profile.' })
+      const id = decodeURIComponent(url.pathname.split('/')[3])
+      const account = data.accounts.find(item => item.id === id)
+      if (!account) return send(response, 404, { error: 'Portal account not found.' })
+      if (id === request.account.id) return send(response, 400, { error: 'You cannot remove the account currently in use.' })
+      if (account.activatedAt) return send(response, 400, { error: 'This profile has been used. Deactivate it instead so the school retains an accurate access history.' })
+      data.accounts = data.accounts.filter(item => item.id !== id)
+      data.accountAudit.push({ id: `audit-${Date.now()}`, action: 'account-removed-before-activation', accountId: id, accountName: account.name, performedBy: request.account.id, createdAt: new Date().toISOString() })
+      await saveData(data)
+      return send(response, 200, { status: 'profile removed' })
     }
     if (request.method === 'GET' && url.pathname === '/api/internal-messages') return send(response, 200, data.internalMessages.slice().sort((a, b) => b.createdAt.localeCompare(a.createdAt)))
     if (request.method === 'GET' && url.pathname === '/api/parent/messages') {
@@ -727,6 +776,60 @@ const server = createServer(async (request, response) => {
       })
       return response.end(Buffer.from(workbookBytes))
     }
+    if (request.method === 'GET' && url.pathname === '/api/class-lists/workbook') {
+      const classId = text(url.searchParams.get('classId'), 100)
+      const schoolClass = data.schoolClasses.find(item => item.id === classId)
+      if (!schoolClass) return send(response, 404, { error: 'Choose a valid class before downloading its list.' })
+      if (request.account.role === 'teacher' && !data.teacherAssignments.some(item => item.classId === schoolClass.id && item.staffName === request.account.name)) return send(response, 403, { error: 'You can download class lists only for your assigned classes.' })
+      const learners = data.admissions.filter(item => item.placement?.className === schoolClass.className && item.placement?.academicYear === schoolClass.academicYear).slice().sort((a, b) => a.learnerName.localeCompare(b.learnerName))
+      const classTeachers = [...new Set(data.teacherAssignments.filter(item => item.classId === schoolClass.id).map(item => item.staffName).filter(Boolean))]
+      const teacherName = classTeachers.length ? classTeachers.join(', ') : 'Not assigned'
+      const safeClass = schoolClass.className.replace(/[^a-zA-Z0-9]+/g, '_').replace(/^_|_$/g, '')
+      const workbook = new ExcelJS.Workbook()
+      workbook.creator = 'St. Dorothy School Massimo'
+      workbook.created = new Date()
+      const sheet = workbook.addWorksheet('Class List', { views: [{ state: 'frozen', ySplit: 7 }] })
+      sheet.columns = [{ width: 7 }, { width: 19 }, { width: 30 }, { width: 28 }, { width: 18 }, { width: 18 }]
+      const crestPath = join(root, 'frontend', 'public', 'assets', 'st-dorothy-crest-refined.png')
+      try { const crest = workbook.addImage({ buffer: await readFile(crestPath), extension: 'png' }); sheet.addImage(crest, { tl: { col: 0, row: 0 }, ext: { width: 58, height: 58 } }) } catch { /* A valid workbook is still created if the logo asset is unavailable. */ }
+      sheet.mergeCells('B1:F1'); sheet.getCell('B1').value = "ST. DOROTHY'S SCHOOL MASSIMO"
+      sheet.getCell('B1').font = { name: 'Aptos Display', size: 16, bold: true, color: { argb: 'FF123664' } }
+      sheet.getCell('B1').alignment = { vertical: 'middle' }
+      sheet.mergeCells('B2:F2'); sheet.getCell('B2').value = 'P.O. Box 36-60607, Mikinduri, Meru, Kenya · +254 722 841 569 · stdorothysschoolmassimo@gmail.com'
+      sheet.getCell('B2').font = { size: 9, color: { argb: 'FF536B84' } }; sheet.getCell('B2').alignment = { wrapText: true }
+      sheet.mergeCells('A4:F4'); sheet.getCell('A4').value = `CLASS LIST — ${schoolClass.className.toUpperCase()} · ${schoolClass.academicYear}`
+      sheet.getCell('A4').font = { size: 13, bold: true, color: { argb: 'FFFFFFFF' } }; sheet.getCell('A4').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF123664' } }; sheet.getCell('A4').alignment = { horizontal: 'center' }
+      sheet.mergeCells('A5:C5'); sheet.getCell('A5').value = `Class teacher: ${teacherName}`
+      sheet.mergeCells('D5:F5'); sheet.getCell('D5').value = `Generated: ${new Intl.DateTimeFormat('en-KE', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Africa/Nairobi' }).format(new Date())}`
+      for (const cell of ['A5', 'D5']) { sheet.getCell(cell).font = { bold: true, color: { argb: 'FF294A6E' } }; sheet.getCell(cell).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F6FB' } } }
+      const header = sheet.addRow(['No.', 'Admission No.', 'Learner name', 'Parent / guardian', 'Parent phone', 'Grade'])
+      header.font = { bold: true, color: { argb: 'FFFFFFFF' } }; header.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1D5EAA' } }; header.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true }
+      learners.forEach((learner, index) => { const row = sheet.addRow([index + 1, learner.admissionNumber || 'Pending', learner.learnerName, learner.guardianName || '—', learner.guardianPhone || '—', learner.grade || schoolClass.grade]); row.alignment = { vertical: 'middle', wrapText: true }; if (index % 2 === 1) row.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF6F9FC' } } })
+      if (!learners.length) { const row = sheet.addRow(['', '', 'No learners placed in this stream yet.', '', '', '']); row.font = { italic: true, color: { argb: 'FF60758C' } } }
+      sheet.eachRow(row => row.eachCell(cell => { cell.border = { top: { style: 'thin', color: { argb: 'FFD9E4EF' } }, left: { style: 'thin', color: { argb: 'FFD9E4EF' } }, bottom: { style: 'thin', color: { argb: 'FFD9E4EF' } }, right: { style: 'thin', color: { argb: 'FFD9E4EF' } } } }))
+      const bytes = await workbook.xlsx.writeBuffer()
+      response.writeHead(200, { 'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'Content-Disposition': `attachment; filename="st_dorothy_${safeClass}_class_list_${schoolClass.academicYear}.xlsx"` })
+      return response.end(Buffer.from(bytes))
+    }
+    if (request.method === 'GET' && url.pathname === '/api/staff-list/workbook') {
+      const staffByName = new Map(data.staff.filter(item => /teacher/i.test(item.role || '')).map(item => [String(item.fullName || '').toLowerCase(), item]))
+      data.accounts.filter(item => item.role === 'teacher').forEach(account => { const key = String(account.name || '').toLowerCase(); if (!staffByName.has(key)) staffByName.set(key, { fullName: account.name, role: account.title || 'Teacher', phone: '', email: account.identifier, employmentStatus: account.active === false ? 'Inactive' : 'Active' }) })
+      const teachers = [...staffByName.values()].filter(item => item.fullName).sort((a, b) => String(a.fullName).localeCompare(String(b.fullName)))
+      const workbook = new ExcelJS.Workbook(); workbook.creator = 'St. Dorothy School Massimo'; workbook.created = new Date()
+      const sheet = workbook.addWorksheet('Teaching Staff', { views: [{ state: 'frozen', ySplit: 7 }] }); sheet.columns = [{ width: 7 }, { width: 30 }, { width: 25 }, { width: 29 }, { width: 18 }, { width: 30 }, { width: 15 }]
+      const crestPath = join(root, 'frontend', 'public', 'assets', 'st-dorothy-crest-refined.png')
+      try { const crest = workbook.addImage({ buffer: await readFile(crestPath), extension: 'png' }); sheet.addImage(crest, { tl: { col: 0, row: 0 }, ext: { width: 58, height: 58 } }) } catch { /* The report can still be generated if the crest file is unavailable. */ }
+      sheet.mergeCells('B1:G1'); sheet.getCell('B1').value = "ST. DOROTHY'S SCHOOL MASSIMO"; sheet.getCell('B1').font = { name: 'Aptos Display', size: 16, bold: true, color: { argb: 'FF123664' } }; sheet.getCell('B1').alignment = { vertical: 'middle' }
+      sheet.mergeCells('B2:G2'); sheet.getCell('B2').value = 'P.O. Box 36-60607, Mikinduri, Meru, Kenya · +254 722 841 569 · stdorothysschoolmassimo@gmail.com'; sheet.getCell('B2').font = { size: 9, color: { argb: 'FF536B84' } }; sheet.getCell('B2').alignment = { wrapText: true }
+      sheet.mergeCells('A4:G4'); sheet.getCell('A4').value = 'TEACHING STAFF LIST'; sheet.getCell('A4').font = { size: 13, bold: true, color: { argb: 'FFFFFFFF' } }; sheet.getCell('A4').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF123664' } }; sheet.getCell('A4').alignment = { horizontal: 'center' }
+      sheet.mergeCells('A5:D5'); sheet.getCell('A5').value = `Total teaching staff: ${teachers.length}`; sheet.mergeCells('E5:G5'); sheet.getCell('E5').value = `Generated: ${new Intl.DateTimeFormat('en-KE', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Africa/Nairobi' }).format(new Date())}`
+      for (const cell of ['A5', 'E5']) { sheet.getCell(cell).font = { bold: true, color: { argb: 'FF294A6E' } }; sheet.getCell(cell).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F6FB' } } }
+      const header = sheet.addRow(['No.', 'Teacher name', 'Assigned role', 'Class responsibility', 'Phone', 'Email', 'Status']); header.font = { bold: true, color: { argb: 'FFFFFFFF' } }; header.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1D5EAA' } }; header.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true }
+      teachers.forEach((teacher, index) => { const assignments = [...new Set(data.teacherAssignments.filter(item => item.staffName === teacher.fullName).map(item => item.className).filter(Boolean))]; const row = sheet.addRow([index + 1, teacher.fullName, teacher.role || 'Teacher', assignments.length ? assignments.join(', ') : 'Not assigned', teacher.phone || '—', teacher.email || '—', teacher.employmentStatus || 'Active']); row.alignment = { vertical: 'middle', wrapText: true }; if (index % 2 === 1) row.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF6F9FC' } } })
+      if (!teachers.length) { const row = sheet.addRow(['', 'No teaching staff profiles recorded yet.', '', '', '', '', '']); row.font = { italic: true, color: { argb: 'FF60758C' } } }
+      sheet.eachRow(row => row.eachCell(cell => { cell.border = { top: { style: 'thin', color: { argb: 'FFD9E4EF' } }, left: { style: 'thin', color: { argb: 'FFD9E4EF' } }, bottom: { style: 'thin', color: { argb: 'FFD9E4EF' } }, right: { style: 'thin', color: { argb: 'FFD9E4EF' } } } }))
+      const bytes = await workbook.xlsx.writeBuffer(); response.writeHead(200, { 'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'Content-Disposition': 'attachment; filename="st_dorothy_teaching_staff_list.xlsx"' }); return response.end(Buffer.from(bytes))
+    }
     if (request.method === 'GET' && url.pathname === '/api/assessment-marks') {
       const assessmentId = text(url.searchParams.get('assessmentId'), 80)
       return send(response, 200, data.assessmentMarks.filter(item => !assessmentId || item.assessmentId === assessmentId))
@@ -770,6 +873,49 @@ const server = createServer(async (request, response) => {
         finance: currentFeeSummary(data, application)
       }))
       return send(response, 200, learners)
+    }
+    if (request.method === 'GET' && url.pathname === '/api/finance/statements-workbook') {
+      const outstandingOnly = url.searchParams.get('outstanding') !== 'false'
+      const rows = data.admissions.map(learner => ({ learner, finance: currentFeeSummary(data, learner) })).filter(({ finance }) => !outstandingOnly || Number(finance.balance || 0) > 0)
+      const workbook = new ExcelJS.Workbook(); workbook.creator = 'St. Dorothy School Massimo'; workbook.created = new Date()
+      const sheet = workbook.addWorksheet('Fee Statements Register', { views: [{ state: 'frozen', ySplit: 7 }] })
+      sheet.columns = [{ width: 7 }, { width: 28 }, { width: 20 }, { width: 18 }, { width: 27 }, { width: 18 }, { width: 16 }, { width: 16 }, { width: 16 }]
+      try { const crest = workbook.addImage({ buffer: await readFile(crestPath), extension: 'png' }); sheet.addImage(crest, { tl: { col: 0, row: 0 }, ext: { width: 58, height: 58 } }) } catch { /* The workbook remains usable without the crest. */ }
+      sheet.mergeCells('B1:I1'); sheet.getCell('B1').value = "ST. DOROTHY'S SCHOOL MASSIMO"; sheet.getCell('B1').font = { bold: true, size: 16, color: { argb: '173662' } }
+      sheet.mergeCells('B2:I2'); sheet.getCell('B2').value = 'P.O. Box 36-60607, Mikinduri, Meru, Kenya · +254 722 841 569 · stdorothysschoolmassimo@gmail.com'
+      sheet.mergeCells('B3:I3'); sheet.getCell('B3').value = outstandingOnly ? 'Outstanding Fee Balances — Take-home Statement Register' : 'Fee Balances Register'
+      sheet.mergeCells('B4:I4'); sheet.getCell('B4').value = `Generated: ${new Date().toLocaleString('en-KE')}`
+      const headerRow = sheet.getRow(6); headerRow.values = ['No.', 'Learner name', 'Admission number', 'Class / Grade', 'Parent / Guardian', 'Parent phone', 'Fee due (KES)', 'Paid (KES)', 'Balance (KES)']; headerRow.font = { bold: true, color: { argb: 'FFFFFF' } }; headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: '1D5EAA' } }
+      rows.forEach(({ learner, finance }, index) => sheet.addRow([index + 1, learner.learnerName, learner.admissionNumber, learner.placement?.className || learner.grade, learner.guardianName, learner.guardianPhone, finance.feeDue ?? '', finance.totalPaid ?? 0, finance.balance ?? '']))
+      sheet.eachRow((row, number) => { if (number >= 6) row.alignment = { vertical: 'middle', wrapText: true } }); sheet.getColumn(7).numFmt = '#,##0'; sheet.getColumn(8).numFmt = '#,##0'; sheet.getColumn(9).numFmt = '#,##0'
+      const bytes = await workbook.xlsx.writeBuffer(); response.writeHead(200, { 'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'Content-Disposition': `attachment; filename="st_dorothy_${outstandingOnly ? 'outstanding_fee_statements' : 'fee_balances'}_${new Date().toISOString().slice(0, 10)}.xlsx"` }); return response.end(Buffer.from(bytes))
+    }
+    if (request.method === 'GET' && url.pathname === '/api/finance/statements-bulk') {
+      const className = text(url.searchParams.get('className'), 80)
+      const learners = data.admissions.filter(learner => { const currentClass = learner.placement?.className || learner.grade; const summary = currentFeeSummary(data, learner); return (!className || currentClass === className) && Number(summary.balance || 0) > 0 })
+      if (!learners.length) return send(response, 404, { error: 'No learners with an outstanding balance were found for that grade or class.' })
+      const workbook = new ExcelJS.Workbook(); const sheet = workbook.addWorksheet('Delivery Register'); sheet.columns = [{ width: 8 }, { width: 28 }, { width: 20 }, { width: 18 }, { width: 26 }, { width: 18 }, { width: 18 }, { width: 20 }]
+      try { const crest = workbook.addImage({ buffer: await readFile(crestPath), extension: 'png' }); sheet.addImage(crest, { tl: { col: 0, row: 0 }, ext: { width: 58, height: 58 } }) } catch { /* The delivery register remains usable without the crest. */ }
+      sheet.mergeCells('B1:H1'); sheet.getCell('B1').value = "ST. DOROTHY'S SCHOOL MASSIMO"; sheet.getCell('B1').font = { bold: true, size: 16, color: { argb: '173662' } }; sheet.mergeCells('B2:H2'); sheet.getCell('B2').value = 'Fee Statement Delivery Register'; sheet.mergeCells('B3:H3'); sheet.getCell('B3').value = `Generated: ${new Date().toLocaleString('en-KE')}`
+      sheet.getRow(5).values = ['No.', 'Learner name', 'Admission number', 'Class / Grade', 'Guardian', 'Phone', 'Balance (KES)', 'Issued / Signature']; const header = sheet.getRow(5); header.font = { bold: true, color: { argb: 'FFFFFF' } }; header.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: '1D5EAA' } }
+      learners.forEach((learner, index) => { const finance = currentFeeSummary(data, learner); sheet.addRow([index + 1, learner.learnerName, learner.admissionNumber, learner.placement?.className || learner.grade, learner.guardianName, learner.guardianPhone, finance.balance, '']) }); sheet.getColumn(7).numFmt = '#,##0'; sheet.views = [{ state: 'frozen', ySplit: 5 }]
+      const deliveryRegister = await workbook.xlsx.writeBuffer(); const zipName = `st_dorothy_fee_statements_${safePdfName(className || 'all_classes')}_${new Date().toISOString().slice(0, 10)}.zip`
+      response.writeHead(200, { 'Content-Type': 'application/zip', 'Content-Disposition': `attachment; filename="${zipName}"` }); const archive = new ZipArchive({ zlib: { level: 9 } }); archive.on('error', error => response.destroy(error)); archive.pipe(response)
+      for (const learner of learners) archive.append(await createFeeStatementPdf(data, learner), { name: `fee-statements/${safePdfName(learner.admissionNumber || learner.id)}_${safePdfName(learner.learnerName)}.pdf` })
+      archive.append(Buffer.from(deliveryRegister), { name: 'bursar-delivery-register.xlsx' }); await archive.finalize(); return
+    }
+    if (request.method === 'GET' && /^\/api\/finance\/statements\/[^/]+\/pdf$/.test(url.pathname)) {
+      const admissionId = decodeURIComponent(url.pathname.split('/')[4]); const learner = data.admissions.find(item => item.id === admissionId)
+      if (!learner) return send(response, 404, { error: 'Learner account not found.' })
+      const pdf = await createFeeStatementPdf(data, learner); response.writeHead(200, { 'Content-Type': 'application/pdf', 'Content-Disposition': `inline; filename="st_dorothy_fee_statement_${safePdfName(learner.admissionNumber || learner.id)}.pdf"` }); return response.end(pdf)
+    }
+    if (request.method === 'GET' && /^\/api\/finance\/statements\/[^/]+$/.test(url.pathname)) {
+      const admissionId = decodeURIComponent(url.pathname.split('/')[4])
+      const learner = data.admissions.find(item => item.id === admissionId)
+      if (!learner) return send(response, 404, { error: 'Learner account not found.' })
+      const finance = currentFeeSummary(data, learner)
+      const receipts = data.receipts.filter(item => item.admissionId === learner.id).slice().sort((a, b) => String(a.issuedAt).localeCompare(String(b.issuedAt)))
+      return send(response, 200, { statementNumber: `SD/STM/${new Date().getFullYear()}/${learner.admissionNumber || learner.id}`, generatedAt: new Date().toISOString(), learner: { learnerName: learner.learnerName, admissionNumber: learner.admissionNumber, grade: learner.grade, className: learner.placement?.className || learner.grade, guardianName: learner.guardianName, guardianPhone: learner.guardianPhone }, finance, receipts })
     }
     if (request.method === 'GET' && url.pathname === '/api/finance/receipts') return send(response, 200, data.receipts)
     if (request.method === 'GET' && url.pathname === '/api/finance/mpesa-transactions') return send(response, 200, data.mpesaTransactions)

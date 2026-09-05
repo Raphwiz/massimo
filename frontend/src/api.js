@@ -1,6 +1,7 @@
 async function send(path, options = {}) {
+  const portalRole = typeof window === 'undefined' ? '' : window.sessionStorage.getItem('st_dorothy_portal_role') || ''
   const response = await fetch(path, {
-    headers: { 'Content-Type': 'application/json', ...options.headers },
+    headers: { 'Content-Type': 'application/json', ...(portalRole ? { 'X-Portal-Role': portalRole } : {}), ...options.headers },
     credentials: 'include',
     ...options
   })
@@ -22,6 +23,7 @@ async function request(path, options = {}) {
 
 export const getCalendarEvents = () => request('/api/calendar-events')
 export const loginPortal = (credentials) => request('/api/auth/login', { method: 'POST', body: JSON.stringify(credentials) })
+export const getPortalSession = () => request('/api/auth/session')
 export const logoutPortal = () => request('/api/auth/logout', { method: 'POST' })
 export const changePortalPassword = (passwords) => request('/api/auth/change-password', { method: 'POST', body: JSON.stringify(passwords) })
 export const activatePortalAccount = (details) => request('/api/auth/activate', { method: 'POST', body: JSON.stringify(details) })
@@ -29,6 +31,7 @@ export const getPortalAccounts = () => request('/api/accounts')
 export const createPortalAccount = (details) => request('/api/accounts', { method: 'POST', body: JSON.stringify(details) })
 export const resetPortalAccount = (id) => request(`/api/accounts/${encodeURIComponent(id)}/reset`, { method: 'POST', body: JSON.stringify({}) })
 export const setPortalAccountStatus = (id, active) => request(`/api/accounts/${encodeURIComponent(id)}/status`, { method: 'PUT', body: JSON.stringify({ active }) })
+export const deletePortalAccount = (id) => request(`/api/accounts/${encodeURIComponent(id)}`, { method: 'DELETE' })
 export const getSystemAdminOverview = () => request('/api/system-admin/overview')
 export const createCalendarEvent = (event) => request('/api/calendar-events', { method: 'POST', body: JSON.stringify(event) })
 export const getSmsMessages = () => request('/api/sms')
@@ -62,6 +65,14 @@ export const attendanceWorkbookUrl = ({ className, date } = {}) => {
   const localApi = typeof window !== 'undefined' && ['localhost', '127.0.0.1'].includes(window.location.hostname) ? 'http://127.0.0.1:8787' : ''
   return `${localApi}/api/attendance/workbook?className=${encodeURIComponent(className || '')}&date=${encodeURIComponent(date || '')}`
 }
+export const classListWorkbookUrl = (classId) => {
+  const localApi = typeof window !== 'undefined' && ['localhost', '127.0.0.1'].includes(window.location.hostname) ? 'http://127.0.0.1:8787' : ''
+  return `${localApi}/api/class-lists/workbook?classId=${encodeURIComponent(classId || '')}`
+}
+export const staffListWorkbookUrl = () => {
+  const localApi = typeof window !== 'undefined' && ['localhost', '127.0.0.1'].includes(window.location.hostname) ? 'http://127.0.0.1:8787' : ''
+  return `${localApi}/api/staff-list/workbook`
+}
 export const getLessonPlans = () => request('/api/lesson-plans')
 export const createLessonPlan = (lessonPlan) => request('/api/lesson-plans', { method: 'POST', body: JSON.stringify(lessonPlan) })
 export const updateLessonPlan = (id, lessonPlan) => request(`/api/lesson-plans/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify(lessonPlan) })
@@ -81,6 +92,14 @@ export const createParentPaymentReport = (report) => request('/api/parent/paymen
 export const getParentMessages = (phone = '') => request(`/api/parent/messages?phone=${encodeURIComponent(phone)}`)
 export const createParentMessage = (message) => request('/api/parent/messages', { method: 'POST', body: JSON.stringify(message) })
 export const getFinanceLearners = () => request('/api/finance/learners')
+export const getFeeStatement = (admissionId) => request(`/api/finance/statements/${encodeURIComponent(admissionId)}`)
+export const feeStatementsWorkbookUrl = (outstandingOnly = true) => {
+  const localApi = typeof window !== 'undefined' && ['localhost', '127.0.0.1'].includes(window.location.hostname) ? 'http://127.0.0.1:8787' : ''
+  return `${localApi}/api/finance/statements-workbook?outstanding=${outstandingOnly}`
+}
+const financeDownloadBase = () => typeof window !== 'undefined' && ['localhost', '127.0.0.1'].includes(window.location.hostname) ? 'http://127.0.0.1:8787' : ''
+export const feeStatementPdfUrl = (admissionId) => `${financeDownloadBase()}/api/finance/statements/${encodeURIComponent(admissionId)}/pdf`
+export const feeStatementsBulkUrl = (className = '') => `${financeDownloadBase()}/api/finance/statements-bulk?className=${encodeURIComponent(className)}`
 export const getReceipts = () => request('/api/finance/receipts')
 export const createReceipt = (receipt) => request('/api/finance/receipts', { method: 'POST', body: JSON.stringify(receipt) })
 export const getMpesaTransactions = () => request('/api/finance/mpesa-transactions')
