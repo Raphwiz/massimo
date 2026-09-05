@@ -452,10 +452,11 @@
       "name": "Jane Mwangi",
       "title": "School Secretary",
       "active": true,
-      "passwordSalt": "3c974c9cbf5d8d782d618e38a140994a",
-      "passwordHash": "cfd41546fdabd338acb6446fb7d41880bf8b6edbc679987e81fcadeb7c2a12c26a21bc6bdaa6ce8e000b5797246501dad93ef6594a830a6b24f7257dd80051ad",
+      "passwordSalt": "45a6d96ae8c341bb32c31874ebedaaf2",
+      "passwordHash": "8cc2332144da73e57cceb5aa872eaee54edf3395ce3d0b0320349805a754071e2b55fbe821f9544ff28b4e4e1b7eefd564cafbfe9d4c0e937edac4821f9f5b46",
       "createdAt": "2026-08-31T06:43:49.911Z",
-      "mustChangePassword": true
+      "mustChangePassword": false,
+      "passwordChangedAt": "2026-09-05T17:09:53.488Z"
     },
     {
       "id": "account-bursar",
