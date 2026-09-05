@@ -238,6 +238,7 @@ function routeRoles(method, path) {
   if (method === 'POST' && path === '/api/auth/change-password') return ['system-admin', 'headteacher', 'secretary', 'teacher', 'bursar', 'parent']
   if (method === 'GET' && path === '/api/auth/session') return ['system-admin', 'headteacher', 'secretary', 'teacher', 'bursar', 'parent']
   if (path === '/api/system-admin/overview') return ['system-admin']
+  if (path === '/api/system-admin/go-live') return ['system-admin']
   if (path === '/api/accounts' || path.startsWith('/api/accounts/')) return ['system-admin', 'headteacher']
   if (path.startsWith('/api/finance/')) return ['bursar']
   if (path === '/api/parent/learners' || path === '/api/parent/payment-reports') return ['parent']
@@ -618,6 +619,13 @@ const server = createServer(async (request, response) => {
       return send(response, 200, { status: 'password updated' })
     }
     if (request.method === 'GET' && url.pathname === '/api/system-admin/overview') return send(response, 200, { accounts: { total: data.accounts.length, active: data.accounts.filter(account => account.active !== false).length, pendingActivation: data.accounts.filter(account => account.activationExpiresAt && Date.parse(account.activationExpiresAt) > Date.now()).length }, integrations: [{ name: 'M-Pesa Daraja', configured: Boolean(process.env.MPESA_CONSUMER_KEY && process.env.MPESA_CONSUMER_SECRET && process.env.MPESA_PASSKEY) }, { name: 'SMS provider', configured: Boolean(process.env.SMS_API_KEY) }, { name: 'School email', configured: Boolean(process.env.SMTP_HOST && process.env.SMTP_USER) }], security: { secureCookies: isProduction, allowedOrigins: allowedOrigins.size, twoFactorAuthentication: false } })
+    if (request.method === 'GET' && url.pathname === '/api/system-admin/go-live') return send(response, 200, { admissions: data.admissions.length, parentAccounts: data.accounts.filter(account => account.role === 'parent').length, receipts: data.receipts.length, mpesaTransactions: data.mpesaTransactions.length, attendanceRecords: data.attendanceRecords.length, assessments: data.assessments.length, documents: data.documentRecords.length, messages: data.parentMessages.length + data.internalMessages.length })
+    if (request.method === 'POST' && url.pathname === '/api/system-admin/go-live') {
+      const input = await body(request)
+      if (input.backupConfirmed !== true || input.confirmation !== 'GO LIVE RESET') return send(response, 400, { error: 'Confirm a verified backup and type GO LIVE RESET exactly.' })
+      data.admissions=[]; data.classPlacements=[]; data.attendanceRecords=[]; data.assessments=[]; data.assessmentMarks=[]; data.receipts=[]; data.mpesaTransactions=[]; data.documentRecords=[]; data.parentMessages=[]; data.internalMessages=[]; data.smsMessages=[]; data.calendarEvents=[]; data.promotions=[]; data.admissionEnquiries=[]; data.accounts=data.accounts.filter(account=>account.role!=='parent'); data.accountAudit.unshift({ id:`audit-${Date.now()}`, action:'Go-live demo reset', by:request.account.name, createdAt:new Date().toISOString() })
+      await saveData(data); return send(response, 200, { status: 'Demo records cleared. School configuration, staff accounts, classes, subjects, fee structures, and staff setup were retained.' })
+    }
     if (request.method === 'GET' && url.pathname === '/api/accounts') return send(response, 200, data.accounts.filter(account => request.account.role === 'system-admin' || account.role !== 'system-admin').map(portalAccountForClient).sort((a, b) => a.name.localeCompare(b.name)))
     if (request.method === 'POST' && url.pathname === '/api/accounts') {
       const input = await body(request)

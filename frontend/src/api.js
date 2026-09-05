@@ -33,6 +33,8 @@ export const resetPortalAccount = (id) => request(`/api/accounts/${encodeURIComp
 export const setPortalAccountStatus = (id, active) => request(`/api/accounts/${encodeURIComponent(id)}/status`, { method: 'PUT', body: JSON.stringify({ active }) })
 export const deletePortalAccount = (id) => request(`/api/accounts/${encodeURIComponent(id)}`, { method: 'DELETE' })
 export const getSystemAdminOverview = () => request('/api/system-admin/overview')
+export const getGoLivePreview = () => request('/api/system-admin/go-live')
+export const runGoLiveReset = (details) => request('/api/system-admin/go-live', { method: 'POST', body: JSON.stringify(details) })
 export const createCalendarEvent = (event) => request('/api/calendar-events', { method: 'POST', body: JSON.stringify(event) })
 export const getSmsMessages = () => request('/api/sms')
 export const createSmsMessage = (message) => request('/api/sms', { method: 'POST', body: JSON.stringify(message) })
