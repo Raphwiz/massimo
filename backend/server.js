@@ -72,6 +72,7 @@ const seedData = {
   assessments: [],
   assessmentMarks: [],
   feeStructures: [],
+  feeAdjustments: [],
   leaveRequests: [],
   staffAttendance: [],
   promotions: [],
@@ -83,6 +84,9 @@ const seedData = {
   parentMessages: [],
   accounts: [],
   accountAudit: [],
+  financeAudit: [],
+  financeApprovals: [],
+  websiteSettings: { socialLinks: { facebook: '', instagram: '', youtube: '', tiktok: '' }, gallery: [] },
   admissionEnquiries: []
 }
 
@@ -238,8 +242,15 @@ function routeRoles(method, path) {
   if (method === 'POST' && path === '/api/auth/change-password') return ['system-admin', 'headteacher', 'secretary', 'teacher', 'bursar', 'parent']
   if (method === 'GET' && path === '/api/auth/session') return ['system-admin', 'headteacher', 'secretary', 'teacher', 'bursar', 'parent']
   if (path === '/api/system-admin/overview') return ['system-admin']
+  if (path === '/api/headteacher/dashboard') return ['headteacher']
+  if (path === '/api/headteacher/attendance') return ['headteacher']
   if (path === '/api/system-admin/go-live') return ['system-admin']
+  if (path === '/api/system-admin/website-settings') return ['system-admin']
+  if (path === '/api/public/website-settings') return null
   if (path === '/api/accounts' || path.startsWith('/api/accounts/')) return ['system-admin', 'headteacher']
+  if (path === '/api/parent-portal') return ['secretary', 'system-admin']
+  if (path === '/api/finance/approval-requests') return method === 'POST' ? ['bursar'] : ['bursar', 'headteacher']
+  if (path.startsWith('/api/finance/approval-requests/')) return ['headteacher']
   if (path.startsWith('/api/finance/')) return ['bursar']
   if (path === '/api/parent/learners' || path === '/api/parent/payment-reports') return ['parent']
   if (path === '/api/parent/messages') return method === 'POST' ? ['parent'] : ['parent', 'teacher', 'secretary']
@@ -455,9 +466,13 @@ function currentFeeSummary(data, application) {
   if (!placement?.academicYear || !placement?.term) return { feeDue: null, totalPaid: 0, balance: null, term: null }
   const structure = data.feeStructures.find(item => item.grade === application.grade && item.academicYear === placement.academicYear && item.term === placement.term)
   const totalPaid = data.receipts.filter(receipt => receipt.admissionId === application.id).reduce((total, receipt) => total + Number(receipt.amount || 0), 0)
-  const feeDue = structure ? Number(structure.amount) : null
-  return { feeDue, totalPaid, balance: feeDue === null ? null : Math.max(0, feeDue - totalPaid), term: structure ? `${structure.term} ${structure.academicYear}` : null }
+  const grossFeeDue = structure ? Number(structure.amount) : null
+  const bursaryAmount = grossFeeDue === null ? 0 : (data.feeAdjustments || []).filter(item => item.admissionId === application.id && item.academicYear === placement.academicYear && item.term === placement.term).reduce((total, item) => total + Number(item.amount || 0), 0)
+  const feeDue = grossFeeDue === null ? null : Math.max(0, grossFeeDue - bursaryAmount)
+  return { feeDue, grossFeeDue, bursaryAmount, totalPaid, balance: feeDue === null ? null : Math.max(0, feeDue - totalPaid), term: structure ? `${structure.term} ${structure.academicYear}` : null }
 }
+
+function addFinanceAudit(data, request, action, recordType, recordId, detail = '') { data.financeAudit ??= []; data.financeAudit.unshift({ id:`finance-audit-${Date.now()}-${Math.random().toString(36).slice(2,7)}`, action, recordType, recordId, detail, by:request.account.name, role:request.account.role, createdAt:new Date().toISOString() }) }
 
 const money = value => `KES ${Number(value || 0).toLocaleString('en-KE')}`
 const safePdfName = value => String(value || 'learner').replace(/[^a-z0-9_-]+/gi, '_').replace(/^_+|_+$/g, '')
@@ -470,7 +485,7 @@ async function createFeeStatementPdf(data, learner) {
   document.fillColor('#173662').fontSize(17).font('Helvetica-Bold').text("ST. DOROTHY'S SCHOOL MASSIMO", 108, 42); document.fontSize(8.5).font('Helvetica').text('P.O. Box 36-60607, Mikinduri, Meru, Kenya | +254 722 841 569 | stdorothysschoolmassimo@gmail.com', 108, 66); document.moveTo(42, 100).lineTo(553, 100).stroke('#1D5EAA')
   document.fillColor('#173662').fontSize(15).font('Helvetica-Bold').text('FEE STATEMENT', 42, 116); document.fontSize(8.5).font('Helvetica').fillColor('#536b84').text(`Statement No: ${statementNumber}`, 42, 138).text(`Generated: ${generatedAt.toLocaleString('en-KE')} | Statement period: ${finance.term || 'Current placement period'}`, 42, 151)
   document.fillColor('#173662').fontSize(10).font('Helvetica-Bold').text('Learner and guardian', 42, 180); document.font('Helvetica').fontSize(9).text(`Learner: ${learner.learnerName}`, 42, 198).text(`Admission number: ${learner.admissionNumber || 'Pending'}    Grade/Class: ${learner.placement?.className || learner.grade}`, 42, 212).text(`Guardian: ${learner.guardianName || 'Not recorded'}    Phone: ${learner.guardianPhone || 'Not recorded'}`, 42, 226)
-  document.fillColor('#173662').font('Helvetica-Bold').fontSize(10).text('Account summary', 42, 258); document.font('Helvetica').fontSize(9).text(`Fee charged: ${finance.feeDue === null ? 'Fee plan pending' : money(finance.feeDue)}`, 42, 277).text(`Discounts / bursaries: ${money(0)} (none recorded)`, 42, 291).text(`Recorded payments: ${money(finance.totalPaid)}`, 42, 305); document.fillColor('#933B3B').font('Helvetica-Bold').fontSize(13).text(`Outstanding balance: ${finance.balance === null ? 'Fee plan pending' : money(finance.balance)}`, 42, 328)
+  document.fillColor('#173662').font('Helvetica-Bold').fontSize(10).text('Account summary', 42, 258); document.font('Helvetica').fontSize(9).text(`Gross fee plan: ${finance.grossFeeDue === null ? 'Fee plan pending' : money(finance.grossFeeDue)}`, 42, 277).text(`Approved discounts / bursaries: ${money(finance.bursaryAmount)}${finance.bursaryAmount ? '' : ' (none recorded)'}`, 42, 291).text(`Net fee due: ${finance.feeDue === null ? 'Fee plan pending' : money(finance.feeDue)}`, 42, 305).text(`Recorded payments: ${money(finance.totalPaid)}`, 42, 319); document.fillColor('#933B3B').font('Helvetica-Bold').fontSize(13).text(`Outstanding balance: ${finance.balance === null ? 'Fee plan pending' : money(finance.balance)}`, 42, 342)
   document.fillColor('#173662').fontSize(10).text('Recorded payments and receipt references', 42, 360); document.font('Helvetica-Bold').fontSize(8).text('DATE', 42, 380).text('RECEIPT / REFERENCE', 125, 380).text('METHOD', 315, 380).text('AMOUNT', 440, 380); document.moveTo(42, 392).lineTo(553, 392).stroke('#B8C9DA'); document.font('Helvetica').fontSize(8)
   let y = 403; if (!receipts.length) document.text('No confirmed payments recorded for this learner.', 42, y)
   receipts.slice(0, 12).forEach(receipt => { document.text(String(receipt.issuedAt || '').slice(0, 10), 42, y).text(`${receipt.receiptNumber || ''}${receipt.paymentReference ? ` / ${receipt.paymentReference}` : ''}`, 125, y, { width: 180 }).text(receipt.paymentMethod || '', 315, y).text(money(receipt.amount), 440, y); y += 16 })
@@ -537,11 +552,14 @@ const server = createServer(async (request, response) => {
     data.assessments ??= []
     data.assessmentMarks ??= []
     data.feeStructures ??= []
+    data.feeAdjustments ??= []
     data.leaveRequests ??= []
     data.staffAttendance ??= []
     data.promotions ??= []
     data.receipts ??= []
     data.mpesaTransactions ??= []
+    data.cashbookEntries ??= []
+    data.bankDeposits ??= []
     data.documentRecords ??= []
     data.internalMessages ??= []
     data.parentMessages ??= []
@@ -549,6 +567,9 @@ const server = createServer(async (request, response) => {
     data.accounts = accountsAdded ? createSeedAccounts() : data.accounts
     const systemAdminAdded = ensureSystemAdminAccount(data)
     data.accountAudit ??= []
+    data.financeAudit ??= []
+    data.financeApprovals ??= []
+    data.websiteSettings ??= { socialLinks: { facebook: '', instagram: '', youtube: '', tiktok: '' }, gallery: [] }
     const noticesAdded = !Array.isArray(data.notices)
     data.notices = noticesAdded ? structuredClone(defaultNotices) : data.notices
     const noticeFieldsAdded = ensureNoticeFields(data.notices)
@@ -619,6 +640,11 @@ const server = createServer(async (request, response) => {
       return send(response, 200, { status: 'password updated' })
     }
     if (request.method === 'GET' && url.pathname === '/api/system-admin/overview') return send(response, 200, { accounts: { total: data.accounts.length, active: data.accounts.filter(account => account.active !== false).length, pendingActivation: data.accounts.filter(account => account.activationExpiresAt && Date.parse(account.activationExpiresAt) > Date.now()).length }, integrations: [{ name: 'M-Pesa Daraja', configured: Boolean(process.env.MPESA_CONSUMER_KEY && process.env.MPESA_CONSUMER_SECRET && process.env.MPESA_PASSKEY) }, { name: 'SMS provider', configured: Boolean(process.env.SMS_API_KEY) }, { name: 'School email', configured: Boolean(process.env.SMTP_HOST && process.env.SMTP_USER) }], security: { secureCookies: isProduction, allowedOrigins: allowedOrigins.size, twoFactorAuthentication: false } })
+    if (request.method === 'GET' && url.pathname === '/api/public/website-settings') return send(response,200,data.websiteSettings)
+    if (request.method === 'GET' && url.pathname === '/api/system-admin/website-settings') return send(response,200,data.websiteSettings)
+    if (request.method === 'PUT' && url.pathname === '/api/system-admin/website-settings') { const input=await body(request);const link=value=>/^https?:\/\//i.test(String(value||''))?text(value,300):'';data.websiteSettings={socialLinks:{facebook:link(input.socialLinks?.facebook),instagram:link(input.socialLinks?.instagram),youtube:link(input.socialLinks?.youtube),tiktok:link(input.socialLinks?.tiktok)},gallery:(Array.isArray(input.gallery)?input.gallery:[]).map(link).filter(Boolean).slice(0,6)};await saveData(data);return send(response,200,data.websiteSettings) }
+    if (request.method === 'GET' && url.pathname === '/api/headteacher/dashboard') { const latestDate=data.attendanceRecords.map(item=>item.date).sort().at(-1)||''; const attendance=latestDate?data.attendanceRecords.filter(item=>item.date===latestDate):[]; const present=attendance.filter(item=>item.status==='Present'||item.status==='Late').length; const pendingApprovals=(data.financeApprovals||[]).filter(item=>item.status==='Pending Headteacher approval').length; const pendingAdmissions=data.admissions.filter(item=>!item.placement||item.placement.decision!=='Confirmed').length; return send(response,200,{learners:data.admissions.length,staff:data.staff.length,attendance:{date:latestDate,total:attendance.length,present,percentage:attendance.length?Math.round(present/attendance.length*100):null},pendingAdmissions,pendingApprovals,recentNotices:data.notices.filter(item=>item.status==='Published').slice(0,3),recentClasses:data.schoolClasses.filter(item=>item.status==='Active').slice(0,6)}) }
+    if (request.method === 'GET' && url.pathname === '/api/headteacher/attendance') { const date=text(url.searchParams.get('date'),10); const classes=data.schoolClasses.filter(item=>item.status==='Active').map(item=>item.className); const rows=classes.map(className=>{const enrolled=data.admissions.filter(item=>(item.placement?.className||item.grade)===className).length;const records=data.attendanceRecords.filter(item=>item.className===className&&(!date||item.date===date));const present=records.filter(item=>item.status==='Present').length;const late=records.filter(item=>item.status==='Late').length;const absent=records.filter(item=>item.status==='Absent').length;const excused=records.filter(item=>item.status==='Excused').length;return {className,enrolled,marked:records.length,present,late,absent,excused,percentage:enrolled?Math.round((present+late)/enrolled*100):null}});return send(response,200,{date,classes:rows}) }
     if (request.method === 'GET' && url.pathname === '/api/system-admin/go-live') return send(response, 200, { admissions: data.admissions.length, parentAccounts: data.accounts.filter(account => account.role === 'parent').length, receipts: data.receipts.length, mpesaTransactions: data.mpesaTransactions.length, attendanceRecords: data.attendanceRecords.length, assessments: data.assessments.length, documents: data.documentRecords.length, messages: data.parentMessages.length + data.internalMessages.length })
     if (request.method === 'POST' && url.pathname === '/api/system-admin/go-live') {
       const input = await body(request)
@@ -627,6 +653,14 @@ const server = createServer(async (request, response) => {
       await saveData(data); return send(response, 200, { status: 'Demo records cleared. School configuration, staff accounts, classes, subjects, fee structures, and staff setup were retained.' })
     }
     if (request.method === 'GET' && url.pathname === '/api/accounts') return send(response, 200, data.accounts.filter(account => request.account.role === 'system-admin' || account.role !== 'system-admin').map(portalAccountForClient).sort((a, b) => a.name.localeCompare(b.name)))
+    if (request.method === 'POST' && url.pathname === '/api/parent-portal') {
+      const input = await body(request); const admissionId = text(input.admissionId, 100); const learner = data.admissions.find(item => item.id === admissionId)
+      if (!learner || !normalisePhone(learner.guardianPhone)) return send(response, 400, { error: 'Select a learner with a valid guardian phone number first.' })
+      const identifier = normalisePhone(learner.guardianPhone); const existing = data.accounts.find(account => account.role === 'parent' && account.identifier === identifier)
+      if (existing) return send(response, 409, { error: 'A parent portal account already exists for this guardian phone number.' })
+      const activation = issueActivation({ id:`account-${Date.now()}-${randomBytes(4).toString('hex')}`, identifier, role:'parent', name: learner.guardianName || 'Parent / Guardian', title:'Parent / Guardian', parentPhone:identifier, active:true, createdAt:new Date().toISOString() }); data.accounts.push(activation.account); await saveData(data)
+      return send(response, 201, { account: portalAccountForClient(activation.account), activation: { code: activation.code, expiresAt: activation.account.activationExpiresAt, message: activationMessage(activation.account, activation.code, activation.account.activationExpiresAt) } })
+    }
     if (request.method === 'POST' && url.pathname === '/api/accounts') {
       const input = await body(request)
       const role = text(input.role, 20)
@@ -736,12 +770,13 @@ const server = createServer(async (request, response) => {
     if (request.method === 'GET' && url.pathname === '/api/attendance/workbook') {
       const className = text(url.searchParams.get('className'), 60)
       const date = text(url.searchParams.get('date'), 10)
-      const hasRecords = data.attendanceRecords.some(item => item.className === className && item.date === date)
-      if (!className || !/^\d{4}-\d{2}-\d{2}$/.test(date) || !hasRecords) return send(response, 400, { error: 'Save attendance for the selected class and date before downloading the Excel register.' })
+      if (!className || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return send(response, 400, { error: 'Choose a class and valid attendance date before downloading the Excel register.' })
       const safeClass = className.replace(/[^a-zA-Z0-9]+/g, '_').replace(/^_|_$/g, '')
       const fileName = `st_dorothy_attendance_${safeClass}_${date}.xlsx`
-      const records = data.attendanceRecords.filter(item => item.className === className && item.date === date).sort((a, b) => a.learnerName.localeCompare(b.learnerName))
+      const savedRecords = data.attendanceRecords.filter(item => item.className === className && item.date === date)
       const admissionById = new Map(data.admissions.map(item => [item.id, item]))
+      const recordByAdmission = new Map(savedRecords.map(item => [item.admissionId, item]))
+      const records = data.admissions.filter(item => (item.placement?.className || item.grade) === className).slice().sort((a,b) => a.learnerName.localeCompare(b.learnerName)).map(learner => ({ admissionId: learner.id, learnerName: learner.learnerName, status: recordByAdmission.get(learner.id)?.status || 'Not marked', reason: recordByAdmission.get(learner.id)?.reason || '', markedAt: recordByAdmission.get(learner.id)?.markedAt || null }))
       const workbook = new ExcelJS.Workbook()
       workbook.creator = 'St. Dorothy School Massimo'
       workbook.created = new Date()
@@ -772,7 +807,7 @@ const server = createServer(async (request, response) => {
         row.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: row === header ? 'FF2B72C8' : 'FF173B6B' } }
       }
       for (const [index, record] of records.entries()) {
-        const row = sheet.addRow([index + 1, admissionById.get(record.admissionId)?.admissionNumber || '', record.learnerName, record.status, record.reason || '', new Date(record.markedAt)])
+        const row = sheet.addRow([index + 1, admissionById.get(record.admissionId)?.admissionNumber || '', record.learnerName, record.status, record.reason || '', record.markedAt ? new Date(record.markedAt) : 'Not marked'])
         row.getCell(6).numFmt = 'yyyy-mm-dd hh:mm'
         row.alignment = { vertical: 'center', wrapText: true }
       }
@@ -882,6 +917,18 @@ const server = createServer(async (request, response) => {
       }))
       return send(response, 200, learners)
     }
+    if (request.method === 'GET' && url.pathname === '/api/finance/defaulters') return send(response, 200, data.admissions.map(learner => ({ id:learner.id, learnerName:learner.learnerName, admissionNumber:learner.admissionNumber, className:learner.placement?.className || learner.grade, guardianName:learner.guardianName, guardianPhone:learner.guardianPhone, finance:currentFeeSummary(data, learner) })).filter(item => Number(item.finance.balance || 0) > 0).sort((a,b) => b.finance.balance - a.finance.balance))
+    if (request.method === 'GET' && url.pathname === '/api/finance/budget-summary') { const rows=data.feeStructures.map(structure=>{const learners=data.admissions.filter(learner=>learner.grade===structure.grade&&learner.placement?.academicYear===structure.academicYear&&learner.placement?.term===structure.term);const summaries=learners.map(learner=>currentFeeSummary(data,learner));return {id:structure.id,academicYear:structure.academicYear,term:structure.term,grade:structure.grade,learnerCount:learners.length,grossExpected:Number(structure.amount||0)*learners.length,bursaryImpact:summaries.reduce((sum,item)=>sum+Number(item.bursaryAmount||0),0),netExpected:summaries.reduce((sum,item)=>sum+Number(item.feeDue||0),0),collected:summaries.reduce((sum,item)=>sum+Number(item.totalPaid||0),0),arrears:summaries.reduce((sum,item)=>sum+Number(item.balance||0),0)} });return send(response,200,rows) }
+    if (request.method === 'GET' && url.pathname === '/api/finance/audit') return send(response,200,(data.financeAudit||[]).slice().sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt))))
+    if (request.method === 'GET' && url.pathname === '/api/finance/approval-requests') { const items=(data.financeApprovals||[]).filter(item=>request.account.role==='headteacher'||item.requestedBy===request.account.name); return send(response,200,items.slice().sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt)))) }
+    if (request.method === 'GET' && url.pathname === '/api/finance/adjustments') return send(response,200,(data.feeAdjustments||[]).slice().sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt))))
+    if (request.method === 'GET' && url.pathname === '/api/finance/cashbook') return send(response, 200, data.cashbookEntries.slice().sort((a,b) => String(b.date).localeCompare(String(a.date))))
+    if (request.method === 'POST' && url.pathname === '/api/finance/cashbook') { const input=await body(request); const amount=Number(input.amount); const type=text(input.type,20); if(!['Cash in','Cash out'].includes(type)||!Number.isFinite(amount)||amount<=0) return send(response,400,{error:'Enter a valid cashbook type and amount.'}); const entry={id:`cash-${Date.now()}`,date:text(input.date,10)||new Date().toISOString().slice(0,10),type,description:text(input.description,180),reference:text(input.reference,80),amount,createdAt:new Date().toISOString(),createdBy:request.account.name}; data.cashbookEntries.unshift(entry);data.accountAudit.unshift({id:`audit-${Date.now()}`,action:'Cashbook entry',by:request.account.name,createdAt:entry.createdAt});addFinanceAudit(data,request,'Created','Cashbook entry',entry.id,`${type} · ${money(amount)} · ${entry.reference||entry.description}`);await saveData(data);return send(response,201,entry) }
+    if (request.method === 'GET' && url.pathname === '/api/finance/bank-deposits') return send(response, 200, data.bankDeposits.slice().sort((a,b) => String(b.depositDate).localeCompare(String(a.depositDate))))
+    if (request.method === 'POST' && url.pathname === '/api/finance/bank-deposits') { const input=await body(request);const amount=Number(input.amount);if(!Number.isFinite(amount)||amount<=0||!text(input.bank,80)||!text(input.slipNumber,80))return send(response,400,{error:'Enter the bank, deposit slip number, and a valid amount.'});const deposit={id:`deposit-${Date.now()}`,depositDate:text(input.depositDate,10)||new Date().toISOString().slice(0,10),bank:text(input.bank,80),slipNumber:text(input.slipNumber,80),amount,notes:text(input.notes,180),createdAt:new Date().toISOString(),createdBy:request.account.name};data.bankDeposits.unshift(deposit);data.accountAudit.unshift({id:`audit-${Date.now()}`,action:'Bank deposit recorded',by:request.account.name,createdAt:deposit.createdAt});addFinanceAudit(data,request,'Created','Bank deposit',deposit.id,`${deposit.bank} · ${deposit.slipNumber} · ${money(amount)}`);await saveData(data);return send(response,201,deposit) }
+    if (request.method === 'POST' && url.pathname === '/api/finance/adjustments') { const input=await body(request);const learner=data.admissions.find(item=>item.id===text(input.admissionId,80));const amount=Number(input.amount);const placement=learner?.placement;if(!learner||!placement?.academicYear||!placement?.term||!Number.isFinite(amount)||amount<=0)return send(response,400,{error:'Choose a placed learner and valid bursary or discount amount.'});const requestItem={id:`approval-${Date.now()}`,type:'Bursary / discount',status:'Pending Headteacher approval',admissionId:learner.id,learnerName:learner.learnerName,admissionNumber:learner.admissionNumber,className:placement.className||learner.grade,academicYear:placement.academicYear,term:placement.term,amount,reason:text(input.reason,180)||'Bursary / approved discount',createdAt:new Date().toISOString(),requestedBy:request.account.name};data.financeApprovals.unshift(requestItem);addFinanceAudit(data,request,'Requested approval','Bursary / discount',requestItem.id,`${requestItem.learnerName} · ${money(amount)} · ${requestItem.term} ${requestItem.academicYear}`);await saveData(data);return send(response,201,requestItem) }
+    if (request.method === 'PUT' && url.pathname.startsWith('/api/finance/approval-requests/')) { const id=decodeURIComponent(url.pathname.slice('/api/finance/approval-requests/'.length));const item=data.financeApprovals.find(entry=>entry.id===id);const input=await body(request);const decision=text(input.decision,12);if(!item)return send(response,404,{error:'Approval request not found.'});if(item.status!=='Pending Headteacher approval')return send(response,400,{error:'This request has already been decided.'});if(!['Approved','Rejected'].includes(decision))return send(response,400,{error:'Choose Approved or Rejected.'});item.status=decision;item.decidedAt=new Date().toISOString();item.decidedBy=request.account.name;item.decisionNote=text(input.decisionNote,180);if(decision==='Approved'&&item.type==='Bursary / discount'){const adjustment={id:`adjustment-${Date.now()}`,admissionId:item.admissionId,learnerName:item.learnerName,admissionNumber:item.admissionNumber,className:item.className,academicYear:item.academicYear,term:item.term,amount:item.amount,reason:item.reason,createdAt:item.decidedAt,createdBy:`Approved by ${request.account.name}`};data.feeAdjustments.unshift(adjustment);addFinanceAudit(data,request,'Approved','Bursary / discount',adjustment.id,`${item.learnerName} · ${money(item.amount)} · requested by ${item.requestedBy}`)}else addFinanceAudit(data,request,'Rejected','Bursary / discount',item.id,`${item.learnerName} · ${money(item.amount)} · ${item.decisionNote||'No reason recorded'}`);await saveData(data);return send(response,200,item) }
+    if (request.method === 'GET' && url.pathname === '/api/finance/operations-workbook') { const className=text(url.searchParams.get('className'),80); const report=text(url.searchParams.get('report'),20)||'all'; if(!['all','defaulters','deposits','cashbook'].includes(report)) return send(response,400,{error:'Invalid finance report requested.'}); const workbook=new ExcelJS.Workbook();workbook.creator='St. Dorothy School Massimo';const addTitle=async(sheet,title,headers)=>{sheet.columns=headers.map(()=>({width:22}));try{const crest=workbook.addImage({buffer:await readFile(crestPath),extension:'png'});sheet.addImage(crest,{tl:{col:0,row:0},ext:{width:54,height:54}})}catch{}sheet.mergeCells(`B1:${String.fromCharCode(64+headers.length)}1`);sheet.getCell('B1').value="ST. DOROTHY'S SCHOOL MASSIMO";sheet.getCell('B1').font={bold:true,size:16,color:{argb:'173662'}};sheet.mergeCells(`B2:${String.fromCharCode(64+headers.length)}2`);sheet.getCell('B2').value=`${title} · Generated ${new Date().toLocaleString('en-KE')}`;sheet.getRow(4).values=headers;sheet.getRow(4).font={bold:true,color:{argb:'FFFFFF'}};sheet.getRow(4).fill={type:'pattern',pattern:'solid',fgColor:{argb:'1D5EAA'}};sheet.views=[{state:'frozen',ySplit:4}]};if(report==='all'||report==='defaulters'){const def=workbook.addWorksheet('Defaulters');await addTitle(def,'Outstanding fee balances',['Learner','Admission number','Class','Guardian','Phone','Fee due','Paid','Balance']);data.admissions.map(l=>({l,f:currentFeeSummary(data,l)})).filter(({l,f})=>(!className||(l.placement?.className||l.grade)===className)&&Number(f.balance||0)>0).forEach(({l,f})=>def.addRow([l.learnerName,l.admissionNumber,l.placement?.className||l.grade,l.guardianName,l.guardianPhone,f.feeDue||0,f.totalPaid||0,f.balance||0]))}if(report==='all'||report==='deposits'){const dep=workbook.addWorksheet('Bank Deposits');await addTitle(dep,'Bank deposits',['Date','Bank','Deposit slip','Amount (KES)','Notes','Recorded by']);data.bankDeposits.forEach(i=>dep.addRow([i.depositDate,i.bank,i.slipNumber,i.amount,i.notes,i.createdBy]))}if(report==='all'||report==='cashbook'){const cash=workbook.addWorksheet('Cashbook Expenses');await addTitle(cash,'Daily cashbook expenses',['Date','Type','Description','Reference','Amount (KES)','Recorded by']);data.cashbookEntries.filter(i=>i.type==='Cash out').forEach(i=>cash.addRow([i.date,i.type,i.description,i.reference,i.amount,i.createdBy]))}const filenames={all:'st_dorothy_finance_operations.xlsx',defaulters:`st_dorothy_defaulters_${safePdfName(className||'all_classes')}.xlsx`,deposits:'st_dorothy_bank_deposits.xlsx',cashbook:'st_dorothy_cashbook_expenses.xlsx'};const bytes=await workbook.xlsx.writeBuffer();response.writeHead(200,{'Content-Type':'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','Content-Disposition':`attachment; filename="${filenames[report]}"`});return response.end(Buffer.from(bytes)) }
     if (request.method === 'GET' && url.pathname === '/api/finance/statements-workbook') {
       const outstandingOnly = url.searchParams.get('outstanding') !== 'false'
       const rows = data.admissions.map(learner => ({ learner, finance: currentFeeSummary(data, learner) })).filter(({ finance }) => !outstandingOnly || Number(finance.balance || 0) > 0)
@@ -1268,7 +1315,7 @@ const server = createServer(async (request, response) => {
       const amount = Number(input.amount)
       if (!schoolGrades.has(grade) || !/^\d{4}$/.test(academicYear) || !term || !Number.isFinite(amount) || amount < 0) return send(response, 400, { error: 'Choose a grade, academic year, term, and valid fee amount.' })
       const structure = { id: `fees-${Date.now()}`, grade, academicYear, term, amount, updatedAt: new Date().toISOString(), setBy: 'Bursar' }
-      data.feeStructures = [...data.feeStructures.filter(item => !(item.grade === grade && item.term === term && item.academicYear === academicYear)), structure]
+      data.feeStructures = [...data.feeStructures.filter(item => !(item.grade === grade && item.term === term && item.academicYear === academicYear)), structure]; addFinanceAudit(data,request,'Changed','Fee plan',structure.id,`${grade} · ${term} ${academicYear} · ${money(amount)}`)
       await saveData(data)
       return send(response, 201, structure)
     }
@@ -1376,6 +1423,7 @@ const server = createServer(async (request, response) => {
         issuedAt
       }
       data.receipts.unshift(receipt)
+      addFinanceAudit(data,request,'Created','Receipt',receipt.id,`${receipt.receiptNumber} · ${receipt.learnerName} · ${money(amount)} · ${paymentMethod}`)
       await saveData(data)
       return send(response, 201, receipt)
     }
@@ -1389,6 +1437,7 @@ const server = createServer(async (request, response) => {
       if (data.mpesaTransactions.some(transaction => transaction.transactionCode === transactionCode)) return send(response, 400, { error: 'That M-Pesa transaction code has already been recorded.' })
       const transaction = { id: `mpesa-${Date.now()}`, transactionCode, senderPhone, amount, receivedAt: new Date().toISOString(), status: 'Awaiting match' }
       data.mpesaTransactions.unshift(transaction)
+      addFinanceAudit(data,request,'Created','M-Pesa confirmation',transaction.id,`${transactionCode} · ${money(amount)} · awaiting match`)
       await saveData(data)
       return send(response, 201, transaction)
     }
@@ -1408,6 +1457,7 @@ const server = createServer(async (request, response) => {
       const reportedAt = new Date().toISOString()
       const transaction = { id: `mpesa-${Date.now()}`, transactionCode, senderPhone, amount, receivedAt: reportedAt, reportedAt, source: 'Parent report', status: 'Parent reported', admissionId: learner.id, admissionNumber: learner.admissionNumber, learnerName: learner.learnerName, className: learner.placement?.className || learner.grade, guardianName: learner.guardianName }
       data.mpesaTransactions.unshift(transaction)
+      addFinanceAudit(data,request,'Created','Parent M-Pesa report',transaction.id,`${transactionCode} · ${learner.learnerName} · ${money(amount)}`)
       await saveData(data)
       return send(response, 201, transaction)
     }
@@ -1439,6 +1489,7 @@ const server = createServer(async (request, response) => {
       }
       data.mpesaTransactions = data.mpesaTransactions.map(item => item.id === id ? updatedTransaction : item)
       data.receipts.unshift(receipt)
+      addFinanceAudit(data,request,'Reconciled','M-Pesa confirmation',transaction.id,`${transaction.transactionCode} · ${learner.learnerName} · ${money(transaction.amount)} · receipt ${receipt.receiptNumber}`)
       await saveData(data)
       return send(response, 200, { transaction: updatedTransaction, receipt })
     }
