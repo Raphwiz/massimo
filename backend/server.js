@@ -426,14 +426,11 @@ function ensureNoticeFields(notices) {
 }
 
 function nextAdmissionNumber(createdAt, admissions) {
-  const year = new Date(createdAt).getFullYear() || new Date().getFullYear()
-  const prefix = `SD/ADM/${year}/`
-  const highest = admissions.reduce((maximum, application) => {
-    if (!application.admissionNumber?.startsWith(prefix)) return maximum
-    const value = Number(application.admissionNumber.slice(prefix.length))
-    return Number.isInteger(value) ? Math.max(maximum, value) : maximum
-  }, 0)
-  return `${prefix}${String(highest + 1).padStart(4, '0')}`
+  const numbers = admissions.map(application => String(application.admissionNumber || '').trim()).filter(value => /^\d+$/.test(value)).map(Number).filter(value => Number.isSafeInteger(value) && value > 0)
+  if (!numbers.length) return '1'
+  const used = new Set(numbers), first = Math.min(...numbers), highest = Math.max(...numbers)
+  for (let number = first; number <= highest; number += 1) if (!used.has(number)) return String(number)
+  return String(highest + 1)
 }
 
 function ensureAdmissionNumbers(admissions) {
@@ -1559,10 +1556,12 @@ const server = createServer(async (request, response) => {
       if (!existing) return send(response, 404, { error: 'Admission application not found.' })
       const input = await body(request)
       const requestedAdmissionNumber = text(input.admissionNumber, 40)
+      if (requestedAdmissionNumber && !/^\d+$/.test(requestedAdmissionNumber)) return send(response, 400, { error: 'School admission numbers must use digits only, for example 2342.' })
       if (requestedAdmissionNumber && data.admissions.some(application => application.id !== id && application.admissionNumber === requestedAdmissionNumber)) return send(response, 409, { error: 'That admission number is already assigned to another learner.' })
       const updated = {
         ...existing,
         admissionNumber: requestedAdmissionNumber || existing.admissionNumber,
+        admissionNumberVerified: requestedAdmissionNumber ? true : Boolean(existing.admissionNumberVerified),
         learnerName: text(input.learnerName, 100),
         grade: text(input.grade, 20),
         guardianName: text(input.guardianName, 100),
