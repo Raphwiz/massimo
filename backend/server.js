@@ -117,6 +117,7 @@ async function saveData(data) {
 }
 
 async function legacyOrSeedData() {
+  if (isProduction) return { ...structuredClone(seedData), calendarEvents: [], notices: [], accounts: [] }
   try { return JSON.parse(await readFile(dataFile, 'utf8')) }
   catch (error) { if (error.code === 'ENOENT') return structuredClone(seedData); throw error }
 }
@@ -354,7 +355,8 @@ function activationMessage(account, code, expiresAt) {
 }
 
 function createSeedAccounts() {
-  return seedPortalAccounts.map(account => ({ ...account, active: true, ...createPasswordHash(account.role === 'system-admin' ? systemAdminInitialPassword : initialPortalPassword), createdAt: new Date().toISOString(), mustChangePassword: true }))
+  const accounts = isProduction ? seedPortalAccounts.filter(account => account.role === 'system-admin') : seedPortalAccounts
+  return accounts.map(account => ({ ...account, active: true, ...createPasswordHash(account.role === 'system-admin' ? systemAdminInitialPassword : initialPortalPassword), createdAt: new Date().toISOString(), mustChangePassword: true }))
 }
 
 function ensureSystemAdminAccount(data) {
