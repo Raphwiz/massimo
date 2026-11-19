@@ -1558,8 +1558,11 @@ const server = createServer(async (request, response) => {
       const existing = data.admissions.find(application => application.id === id)
       if (!existing) return send(response, 404, { error: 'Admission application not found.' })
       const input = await body(request)
+      const requestedAdmissionNumber = text(input.admissionNumber, 40)
+      if (requestedAdmissionNumber && data.admissions.some(application => application.id !== id && application.admissionNumber === requestedAdmissionNumber)) return send(response, 409, { error: 'That admission number is already assigned to another learner.' })
       const updated = {
         ...existing,
+        admissionNumber: requestedAdmissionNumber || existing.admissionNumber,
         learnerName: text(input.learnerName, 100),
         grade: text(input.grade, 20),
         guardianName: text(input.guardianName, 100),
