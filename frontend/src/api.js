@@ -42,6 +42,8 @@ export const createCalendarEvent = (event) => request('/api/calendar-events', { 
 export const getSmsMessages = () => request('/api/sms')
 export const createSmsMessage = (message) => request('/api/sms', { method: 'POST', body: JSON.stringify(message) })
 export const getAdmissions = () => request('/api/admissions')
+export const previewLearnerImport = (fileBase64) => request('/api/learner-import/preview', { method: 'POST', body: JSON.stringify({ fileBase64 }) })
+export const commitLearnerImport = (rows) => request('/api/learner-import/commit', { method: 'POST', body: JSON.stringify({ rows }) })
 export const createAdmission = (application) => request('/api/admissions', { method: 'POST', body: JSON.stringify(application) })
 export const updateAdmission = (id, application) => request(`/api/admissions/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify(application) })
 export const getDocuments = () => request('/api/documents')
