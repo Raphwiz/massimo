@@ -428,9 +428,7 @@ function ensureNoticeFields(notices) {
 function nextAdmissionNumber(createdAt, admissions) {
   const numbers = admissions.map(application => String(application.admissionNumber || '').trim()).filter(value => /^\d+$/.test(value)).map(Number).filter(value => Number.isSafeInteger(value) && value > 0)
   if (!numbers.length) return '1'
-  const used = new Set(numbers), first = Math.min(...numbers), highest = Math.max(...numbers)
-  for (let number = first; number <= highest; number += 1) if (!used.has(number)) return String(number)
-  return String(highest + 1)
+  return String(Math.max(...numbers) + 1)
 }
 
 function ensureAdmissionNumbers(admissions) {
@@ -1387,21 +1385,24 @@ const server = createServer(async (request, response) => {
     if (request.method === 'POST' && url.pathname === '/api/admissions') {
       const input = await body(request)
       const createdAt = new Date().toISOString()
+      const fatherName = text(input.fatherName, 100), fatherPhone = text(input.fatherPhone, 20), motherName = text(input.motherName, 100), motherPhone = text(input.motherPhone, 20)
+      const primaryName = motherName || fatherName, primaryPhone = motherPhone || fatherPhone, primaryRelationship = motherName ? 'Mother / guardian' : 'Father / guardian'
       const application = {
         id: `admission-${Date.now()}`,
         admissionNumber: nextAdmissionNumber(createdAt, data.admissions),
         learnerName: text(input.learnerName, 100),
         grade: text(input.grade, 20),
-        guardianName: text(input.guardianName, 100),
-        guardianPhone: text(input.guardianPhone, 20),
-        relationship: text(input.relationship, 40),
-        formerSchool: text(input.formerSchool, 100),
+        fatherName, fatherPhone, motherName, motherPhone,
+        guardianName: primaryName,
+        guardianPhone: primaryPhone,
+        relationship: primaryRelationship,
+        guardians: [{ name: fatherName, phone: fatherPhone, relationship: 'Father' }, { name: motherName, phone: motherPhone, relationship: 'Mother / guardian' }].filter(item => item.name || item.phone),
         medicalNotes: text(input.medicalNotes, 500),
         birthCertificateProvided: Boolean(input.birthCertificateProvided),
         status: 'Application received',
         createdAt
       }
-      if (!application.learnerName || !application.grade || !application.guardianName || !application.guardianPhone) return send(response, 400, { error: 'Learner name, applying grade, guardian name, and guardian phone are required.' })
+      if (!application.learnerName || !application.grade || !application.guardianName || !application.guardianPhone) return send(response, 400, { error: 'Learner name, applying grade, and at least one parent or guardian contact are required.' })
       data.admissions.unshift(application)
       await saveData(data)
       return send(response, 201, application)
@@ -1558,21 +1559,25 @@ const server = createServer(async (request, response) => {
       const requestedAdmissionNumber = text(input.admissionNumber, 40)
       if (requestedAdmissionNumber && !/^\d+$/.test(requestedAdmissionNumber)) return send(response, 400, { error: 'School admission numbers must use digits only, for example 2342.' })
       if (requestedAdmissionNumber && data.admissions.some(application => application.id !== id && application.admissionNumber === requestedAdmissionNumber)) return send(response, 409, { error: 'That admission number is already assigned to another learner.' })
+      const savedFather = existing.fatherName || existing.guardians?.find(item => /father/i.test(item.relationship || '')) || {}, savedMother = existing.motherName || existing.guardians?.find(item => /mother/i.test(item.relationship || '')) || {}
+      const fatherName = text(Object.hasOwn(input, 'fatherName') ? input.fatherName : (typeof savedFather === 'string' ? savedFather : savedFather.name), 100), fatherPhone = text(Object.hasOwn(input, 'fatherPhone') ? input.fatherPhone : (typeof savedFather === 'string' ? '' : savedFather.phone), 20), motherName = text(Object.hasOwn(input, 'motherName') ? input.motherName : (typeof savedMother === 'string' ? savedMother : savedMother.name), 100), motherPhone = text(Object.hasOwn(input, 'motherPhone') ? input.motherPhone : (typeof savedMother === 'string' ? '' : savedMother.phone), 20)
+      const primaryName = motherName || fatherName, primaryPhone = motherPhone || fatherPhone, primaryRelationship = motherName ? 'Mother / guardian' : 'Father / guardian'
       const updated = {
         ...existing,
         admissionNumber: requestedAdmissionNumber || existing.admissionNumber,
         admissionNumberVerified: requestedAdmissionNumber ? true : Boolean(existing.admissionNumberVerified),
         learnerName: text(input.learnerName, 100),
         grade: text(input.grade, 20),
-        guardianName: text(input.guardianName, 100),
-        guardianPhone: text(input.guardianPhone, 20),
-        relationship: text(input.relationship, 40),
-        formerSchool: text(input.formerSchool, 100),
+        fatherName, fatherPhone, motherName, motherPhone,
+        guardianName: primaryName,
+        guardianPhone: primaryPhone,
+        relationship: primaryRelationship,
+        guardians: [{ name: fatherName, phone: fatherPhone, relationship: 'Father' }, { name: motherName, phone: motherPhone, relationship: 'Mother / guardian' }].filter(item => item.name || item.phone),
         medicalNotes: text(input.medicalNotes, 500),
         birthCertificateProvided: Boolean(input.birthCertificateProvided),
         updatedAt: new Date().toISOString()
       }
-      if (!updated.learnerName || !updated.grade || !updated.guardianName || !updated.guardianPhone) return send(response, 400, { error: 'Learner name, applying grade, guardian name, and guardian phone are required.' })
+      if (!updated.learnerName || !updated.grade || !updated.guardianName || !updated.guardianPhone) return send(response, 400, { error: 'Learner name, applying grade, and at least one parent or guardian contact are required.' })
       data.admissions = data.admissions.map(application => application.id === id ? updated : application)
       await saveData(data)
       return send(response, 200, updated)
