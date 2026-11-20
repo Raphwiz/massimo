@@ -265,7 +265,7 @@ function routeRoles(method, path) {
   if (path.startsWith('/api/admissions/')) return ['secretary']
   if (path.startsWith('/api/learner-import/')) return ['secretary', 'system-admin']
   if (path === '/api/calendar-events') return ['secretary']
-  if (path === '/api/school-classes') return method === 'GET' ? ['headteacher', 'secretary', 'teacher'] : ['headteacher']
+  if (path === '/api/school-classes') return method === 'GET' ? ['headteacher', 'secretary', 'teacher'] : ['headteacher', 'secretary']
   if (path.startsWith('/api/school-classes/')) return ['headteacher']
   if (path === '/api/class-placements') return ['headteacher', 'secretary']
   if (path === '/api/class-lists/workbook') return ['secretary', 'teacher']
@@ -1073,7 +1073,7 @@ const server = createServer(async (request, response) => {
       if (!classStatuses.has(status)) return send(response, 400, { error: 'Choose an active or inactive class status.' })
       const className = `${grade} ${stream}`
       if (data.schoolClasses.some(item => item.className.toLowerCase() === className.toLowerCase() && item.academicYear === academicYear)) return send(response, 400, { error: `${className} already exists for ${academicYear}.` })
-      const schoolClass = { id: `class-${Date.now()}`, className, grade, stream, academicYear, capacity, classTeacher, status, createdAt: new Date().toISOString(), createdBy: 'Administrator' }
+      const schoolClass = { id: `class-${Date.now()}`, className, grade, stream, academicYear, capacity, classTeacher, status, createdAt: new Date().toISOString(), createdBy: request.account.name || request.account.role }
       data.schoolClasses.push(schoolClass)
       await saveData(data)
       return send(response, 201, schoolClass)
