@@ -1557,7 +1557,7 @@ const server = createServer(async (request, response) => {
       if (!existing) return send(response, 404, { error: 'Admission application not found.' })
       const input = await body(request)
       const requestedAdmissionNumber = text(input.admissionNumber, 40)
-      if (requestedAdmissionNumber && !/^\d+$/.test(requestedAdmissionNumber)) return send(response, 400, { error: 'School admission numbers must use digits only, for example 2342.' })
+      if (requestedAdmissionNumber && requestedAdmissionNumber !== existing.admissionNumber && !/^\d+$/.test(requestedAdmissionNumber)) return send(response, 400, { error: 'School admission numbers must use digits only, for example 2342.' })
       if (requestedAdmissionNumber && data.admissions.some(application => application.id !== id && application.admissionNumber === requestedAdmissionNumber)) return send(response, 409, { error: 'That admission number is already assigned to another learner.' })
       const savedFather = existing.fatherName || existing.guardians?.find(item => /father/i.test(item.relationship || '')) || {}, savedMother = existing.motherName || existing.guardians?.find(item => /mother/i.test(item.relationship || '')) || {}
       const fatherName = text(Object.hasOwn(input, 'fatherName') ? input.fatherName : (typeof savedFather === 'string' ? savedFather : savedFather.name), 100), fatherPhone = text(Object.hasOwn(input, 'fatherPhone') ? input.fatherPhone : (typeof savedFather === 'string' ? '' : savedFather.phone), 20), motherName = text(Object.hasOwn(input, 'motherName') ? input.motherName : (typeof savedMother === 'string' ? savedMother : savedMother.name), 100), motherPhone = text(Object.hasOwn(input, 'motherPhone') ? input.motherPhone : (typeof savedMother === 'string' ? '' : savedMother.phone), 20)
@@ -1565,7 +1565,7 @@ const server = createServer(async (request, response) => {
       const updated = {
         ...existing,
         admissionNumber: requestedAdmissionNumber || existing.admissionNumber,
-        admissionNumberVerified: requestedAdmissionNumber ? true : Boolean(existing.admissionNumberVerified),
+        admissionNumberVerified: requestedAdmissionNumber && requestedAdmissionNumber !== existing.admissionNumber ? true : Boolean(existing.admissionNumberVerified),
         learnerName: text(input.learnerName, 100),
         grade: text(input.grade, 20),
         fatherName, fatherPhone, motherName, motherPhone,
