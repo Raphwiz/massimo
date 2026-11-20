@@ -267,7 +267,7 @@ function routeRoles(method, path) {
   if (path === '/api/calendar-events') return ['secretary']
   if (path === '/api/school-classes') return method === 'GET' ? ['headteacher', 'secretary', 'teacher'] : ['headteacher', 'secretary']
   if (path.startsWith('/api/school-classes/')) return ['headteacher']
-  if (path === '/api/class-placements') return ['headteacher', 'secretary']
+  if (path === '/api/class-placements' || path === '/api/class-placements/suggestions' || path === '/api/class-placements/auto-place') return ['headteacher', 'secretary']
   if (path === '/api/class-lists/workbook') return ['secretary', 'teacher']
   if (path === '/api/staff-list/workbook') return ['secretary']
   if (path === '/api/staff' || path === '/api/staff-attendance' || path === '/api/promotions') return ['headteacher']
@@ -477,6 +477,31 @@ const standardFeePlans = [
   ...['Grade 1','Grade 2','Grade 3'].flatMap(grade => [['Term 1',10150,16000],['Term 2',10150,15500],['Term 3',10150,15000]].flatMap(([term,day,boarder]) => [{grade,residency:'Day scholar',term,amount:day},{grade,residency:'Boarder',term,amount:boarder}])) ,
   ...['Grade 4','Grade 5','Grade 6','Grade 7','Grade 8','Grade 9'].flatMap(grade => ['Term 1','Term 2','Term 3'].flatMap(term => [{grade,residency:'Day scholar',term,amount:13500},{grade,residency:'Boarder',term,amount:20800}]))
 ]
+
+function placementSuggestions(data, academicYear) {
+  const activeClasses = data.schoolClasses.filter(item => item.status === 'Active' && item.academicYear === academicYear)
+  const occupancy = new Map(activeClasses.map(item => [item.id, 0]))
+  for (const placement of data.classPlacements) {
+    if (placement.academicYear !== academicYear || placement.decision === 'Waitlisted') continue
+    const schoolClass = activeClasses.find(item => item.className === placement.className)
+    if (schoolClass) occupancy.set(schoolClass.id, (occupancy.get(schoolClass.id) || 0) + 1)
+  }
+  const byPhone = new Map()
+  for (const learner of data.admissions) {
+    const phone = normalisePhone(learner.guardianPhone)
+    if (phone) byPhone.set(phone, [...(byPhone.get(phone) || []), learner])
+  }
+  const unplaced = data.admissions.filter(learner => !learner.placement).sort((a, b) => `${a.grade}|${a.learnerName}`.localeCompare(`${b.grade}|${b.learnerName}`))
+  return unplaced.map(learner => {
+    const candidates = activeClasses.filter(item => item.grade === learner.grade && (occupancy.get(item.id) || 0) < item.capacity)
+    const siblings = byPhone.get(normalisePhone(learner.guardianPhone)) || []
+    const siblingStreams = siblings.filter(item => item.id !== learner.id && item.placement?.academicYear === academicYear).map(item => activeClasses.find(schoolClass => schoolClass.className === item.placement.className)?.stream).filter(Boolean)
+    const siblingCandidate = candidates.find(item => siblingStreams.includes(item.stream))
+    const suggested = siblingCandidate || candidates.slice().sort((a, b) => (occupancy.get(a.id) || 0) - (occupancy.get(b.id) || 0) || a.className.localeCompare(b.className))[0]
+    if (suggested) occupancy.set(suggested.id, (occupancy.get(suggested.id) || 0) + 1)
+    return { admissionId: learner.id, learnerName: learner.learnerName, admissionNumber: learner.admissionNumber, grade: learner.grade, guardianPhone: learner.guardianPhone || '', classId: suggested?.id || '', className: suggested?.className || '', stream: suggested?.stream || '', occupancy: suggested ? occupancy.get(suggested.id) : 0, capacity: suggested?.capacity || 0, reason: suggested ? (siblingCandidate ? `Sibling stream match: ${suggested.stream}` : 'Lowest current class size') : 'No active class with available space' }
+  })
+}
 
 function currentFeeSummary(data, application) {
   const placement = application.placement
@@ -1542,6 +1567,31 @@ const server = createServer(async (request, response) => {
       addFinanceAudit(data,request,'Reconciled','M-Pesa confirmation',transaction.id,`${transaction.transactionCode} · ${learner.learnerName} · ${money(transaction.amount)} · receipt ${receipt.receiptNumber}`)
       await saveData(data)
       return send(response, 200, { transaction: updatedTransaction, receipt })
+    }
+
+    if (request.method === 'GET' && url.pathname === '/api/class-placements/suggestions') {
+      const academicYear = text(url.searchParams.get('academicYear'), 10) || data.schoolClasses.map(item => item.academicYear).sort().at(-1) || ''
+      return send(response, 200, { academicYear, suggestions: placementSuggestions(data, academicYear) })
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/class-placements/auto-place') {
+      const input = await body(request)
+      const academicYear = text(input.academicYear, 10)
+      const term = text(input.term, 20) || 'Term 1'
+      const requestedIds = new Set(Array.isArray(input.admissionIds) ? input.admissionIds.map(item => text(item, 80)).filter(Boolean) : [])
+      if (!/^\d{4}$/.test(academicYear) || !['Term 1', 'Term 2', 'Term 3'].includes(term)) return send(response, 400, { error: 'Choose a valid academic year and term.' })
+      const suggestions = placementSuggestions(data, academicYear).filter(item => (!requestedIds.size || requestedIds.has(item.admissionId)) && item.classId)
+      if (!suggestions.length) return send(response, 400, { error: 'There are no eligible learners with space available for automatic placement.' })
+      const timestamp = new Date().toISOString()
+      const placements = suggestions.map((suggestion, index) => {
+        const learner = data.admissions.find(item => item.id === suggestion.admissionId)
+        return { id: `placement-${Date.now()}-${index + 1}`, admissionId: learner.id, admissionNumber: learner.admissionNumber, learnerName: learner.learnerName, requestedGrade: learner.grade, className: suggestion.className, academicYear, term, decision: 'Confirmed', assessmentResult: '', notes: `Placement assistant: ${suggestion.reason}`, assignedBy: request.account.name || 'School office', assignedAt: timestamp, updatedAt: timestamp }
+      })
+      const placedIds = new Set(placements.map(item => item.admissionId))
+      data.classPlacements = [...placements, ...data.classPlacements]
+      data.admissions = data.admissions.map(item => { const placement = placements.find(next => next.admissionId === item.id); return placement ? { ...item, placement, status: `Placement confirmed · ${placement.className}`, updatedAt: timestamp } : item })
+      await saveData(data)
+      return send(response, 201, { placed: placements.length, skipped: requestedIds.size ? requestedIds.size - placedIds.size : 0, placements })
     }
 
     if (request.method === 'POST' && url.pathname === '/api/class-placements') {
