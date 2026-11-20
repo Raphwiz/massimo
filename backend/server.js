@@ -733,6 +733,7 @@ const server = createServer(async (request, response) => {
       if (request.account.role !== 'system-admin') return send(response, 403, { error: 'Only the System Administrator can grant additional portal roles.' })
       const id = decodeURIComponent(url.pathname.split('/')[3]); const input = await body(request); const role = text(input.role, 20); const action = text(input.action, 12) || 'grant'; const account = data.accounts.find(item => item.id === id)
       if (!account) return send(response, 404, { error: 'Portal account not found.' })
+      if (!['headteacher', 'secretary', 'bursar'].includes(account.role)) return send(response, 400, { error: 'Additional office roles can only be managed for existing Headteacher, Secretary, or Bursar profiles.' })
       if (!['headteacher', 'secretary', 'bursar'].includes(role) || !['grant', 'revoke'].includes(action)) return send(response, 400, { error: 'Choose a valid portal role action.' })
       if (action === 'revoke' && account.role === role) return send(response, 400, { error: 'The account’s primary role cannot be removed. Deactivate the account or assign a different primary profile instead.' })
       const currentRoles = accountRoles(account)
