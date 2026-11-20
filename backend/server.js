@@ -466,7 +466,7 @@ function nextReceiptNumber(issuedAt, receipts) {
 }
 
 const defaultClassCapacity = 35
-const schoolGrades = new Set(['Pre-Primary', ...Array.from({ length: 9 }, (_, index) => `Grade ${index + 1}`)])
+const schoolGrades = new Set(['Pre-Primary', 'PP1', 'PP2', ...Array.from({ length: 9 }, (_, index) => `Grade ${index + 1}`)])
 const classStatuses = new Set(['Active', 'Inactive'])
 const placementDecisions = new Set(['Pending headteacher approval', 'Confirmed', 'Waitlisted'])
 const attendanceStatuses = new Set(['Present', 'Absent', 'Late', 'Excused'])
