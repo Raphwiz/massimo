@@ -472,11 +472,17 @@ const classStatuses = new Set(['Active', 'Inactive'])
 const placementDecisions = new Set(['Pending headteacher approval', 'Confirmed', 'Waitlisted'])
 const attendanceStatuses = new Set(['Present', 'Absent', 'Late', 'Excused'])
 const staffRoles = new Set(['Headteacher', 'Deputy Headteacher', 'Teacher', 'Class Teacher', 'Secretary', 'Bursar', 'Support Staff'])
+const standardFeePlans = [
+  ...['Baby Class','PP1','PP2'].flatMap(grade => ['Term 1','Term 2','Term 3'].map(term => ({grade,residency:'Day scholar',term,amount:8150}))),
+  ...['Grade 1','Grade 2','Grade 3'].flatMap(grade => [['Term 1',10150,16000],['Term 2',10150,15500],['Term 3',10150,15000]].flatMap(([term,day,boarder]) => [{grade,residency:'Day scholar',term,amount:day},{grade,residency:'Boarder',term,amount:boarder}])) ,
+  ...['Grade 4','Grade 5','Grade 6','Grade 7','Grade 8','Grade 9'].flatMap(grade => ['Term 1','Term 2','Term 3'].flatMap(term => [{grade,residency:'Day scholar',term,amount:13500},{grade,residency:'Boarder',term,amount:20800}]))
+]
 
 function currentFeeSummary(data, application) {
   const placement = application.placement
   if (!placement?.academicYear || !placement?.term) return { feeDue: null, totalPaid: 0, balance: null, term: null }
-  const structure = data.feeStructures.find(item => item.grade === application.grade && item.academicYear === placement.academicYear && item.term === placement.term)
+  const residency = application.residency || 'Day scholar'
+  const structure = data.feeStructures.find(item => item.grade === application.grade && (item.residency || 'Day scholar') === residency && item.academicYear === placement.academicYear && item.term === placement.term)
   const totalPaid = data.receipts.filter(receipt => receipt.admissionId === application.id).reduce((total, receipt) => total + Number(receipt.amount || 0), 0)
   const grossFeeDue = structure ? Number(structure.amount) : null
   const bursaryAmount = grossFeeDue === null ? 0 : (data.feeAdjustments || []).filter(item => item.admissionId === application.id && item.academicYear === placement.academicYear && item.term === placement.term).reduce((total, item) => total + Number(item.amount || 0), 0)
@@ -572,6 +578,8 @@ const server = createServer(async (request, response) => {
     data.assessments ??= []
     data.assessmentMarks ??= []
     data.feeStructures ??= []
+    const feePlansAdded = !data.feeStructures.length
+    if (feePlansAdded) data.feeStructures = standardFeePlans.map((plan,index) => ({ id:`standard-fees-2026-${index + 1}`, ...plan, academicYear:'2026', updatedAt:new Date().toISOString(), setBy:'School fee schedule' }))
     data.feeAdjustments ??= []
     data.leaveRequests ??= []
     data.staffAttendance ??= []
@@ -596,7 +604,7 @@ const server = createServer(async (request, response) => {
     const admissionNumbersAdded = ensureAdmissionNumbers(data.admissions)
     const schoolClassesAdded = ensureSchoolClasses(data)
 
-    if (accountsAdded || systemAdminAdded) await saveData(data)
+    if (accountsAdded || systemAdminAdded || feePlansAdded) await saveData(data)
     if (!requireAccess(request, response, data, url)) return
 
     if (request.method === 'GET' && url.pathname === '/api/health') return send(response, 200, { status: 'ok' })
@@ -1417,7 +1425,7 @@ const server = createServer(async (request, response) => {
         id: `admission-${Date.now()}`,
         admissionNumber: nextAdmissionNumber(createdAt, data.admissions),
         learnerName: text(input.learnerName, 100),
-        grade: text(input.grade, 20), residency,
+        grade: text(input.grade, 20), residency, admissionFee: 500, admissionFeeStatus: 'Unpaid',
         fatherName, fatherPhone, motherName, motherPhone,
         guardianName: primaryName,
         guardianPhone: primaryPhone,
