@@ -261,7 +261,7 @@ function routeRoles(method, path) {
   if (path === '/api/notices') return method === 'GET' ? ['headteacher', 'secretary', 'teacher', 'bursar', 'parent'] : ['secretary']
   if (path.startsWith('/api/documents')) return ['secretary']
   if (path === '/api/sms') return ['secretary']
-  if (path === '/api/admissions') return ['secretary']
+  if (path === '/api/admissions') return method === 'GET' ? ['secretary', 'headteacher'] : ['secretary']
   if (path.startsWith('/api/admissions/')) return ['secretary']
   if (path.startsWith('/api/learner-import/')) return ['secretary', 'system-admin']
   if (path === '/api/calendar-events') return ['secretary']
