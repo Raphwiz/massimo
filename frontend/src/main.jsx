@@ -428,6 +428,7 @@ function ClassPlacementPage({ onNavigate }) {
     }).catch(error => setStatus(error.message)).finally(() => setLoading(false))
   }
   useEffect(() => { load() }, [])
+  useEffect(() => { const timer=window.setTimeout(()=>document.querySelectorAll('.placement-form-panel select[name="decision"]').forEach(select=>select.closest('label')?.remove()),0); return()=>window.clearTimeout(timer) }, [selectedId, selectedClass, placementData.placements])
   const activeAdmission = admissions.find(application => application.id === selectedId)
   const existingPlacement = placementData.placements.find(placement => placement.admissionId === selectedId)
   const matchingClasses = activeAdmission ? (placementData.classes || []).filter(schoolClass => schoolClass.grade === activeAdmission.grade && schoolClass.status === 'Active') : []
@@ -449,7 +450,7 @@ function ClassPlacementPage({ onNavigate }) {
     const form = new FormData(event.currentTarget)
     setSaving(true)
     try {
-      const saved = await saveClassPlacement({ admissionId: activeAdmission.id, classId: selectedSchoolClass.id, academicYear: String(form.get('academicYear') || ''), term: String(form.get('term') || ''), decision: String(form.get('decision') || ''), assessmentResult: String(form.get('assessmentResult') || ''), notes: String(form.get('notes') || '') })
+      const saved = await saveClassPlacement({ admissionId: activeAdmission.id, classId: selectedSchoolClass.id, academicYear: String(form.get('academicYear') || ''), term: String(form.get('term') || ''), decision: 'Confirmed', assessmentResult: String(form.get('assessmentResult') || ''), notes: String(form.get('notes') || '') })
       setAdmissions(items => items.map(item => item.id === saved.admission.id ? saved.admission : item))
       setPlacementData(current => ({ ...current, classes: saved.classes || current.classes, placements: current.placements.some(item => item.admissionId === saved.placement.admissionId) ? current.placements.map(item => item.admissionId === saved.placement.admissionId ? saved.placement : item) : [saved.placement, ...current.placements] }))
       setStatus(`${saved.admission.learnerName} has been marked ${saved.placement.decision.toLowerCase()} for ${saved.placement.className}.`)

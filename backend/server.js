@@ -1548,14 +1548,13 @@ const server = createServer(async (request, response) => {
       const input = await body(request)
       const admissionId = text(input.admissionId, 80)
       const classId = text(input.classId, 80)
-      const decision = text(input.decision, 40)
+      const decision = 'Confirmed'
       const admission = data.admissions.find(application => application.id === admissionId)
       if (!admission) return send(response, 404, { error: 'The selected admission application was not found.' })
       const academicYear = text(input.academicYear, 10)
       const schoolClass = data.schoolClasses.find(item => item.id === classId && item.academicYear === academicYear)
       if (!schoolClass || schoolClass.status !== 'Active') return send(response, 400, { error: 'Select an active class created for the chosen academic year.' })
       if (schoolClass.grade !== admission.grade) return send(response, 400, { error: `Choose a class set up for ${admission.grade}.` })
-      if (!placementDecisions.has(decision)) return send(response, 400, { error: 'Select a valid placement decision.' })
       const className = schoolClass.className
       const existing = data.classPlacements.find(placement => placement.admissionId === admissionId)
       const occupied = data.classPlacements.filter(placement => placement.className === className && placement.admissionId !== admissionId && placement.decision !== 'Waitlisted').length
