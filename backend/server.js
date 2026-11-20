@@ -578,8 +578,8 @@ const server = createServer(async (request, response) => {
     data.assessments ??= []
     data.assessmentMarks ??= []
     data.feeStructures ??= []
-    const feePlansAdded = !data.feeStructures.length
-    if (feePlansAdded) data.feeStructures = standardFeePlans.map((plan,index) => ({ id:`standard-fees-2026-${index + 1}`, ...plan, academicYear:'2026', updatedAt:new Date().toISOString(), setBy:'School fee schedule' }))
+    const feePlansAdded = !data.feeStructures.some(item => item.academicYear === '2027')
+    if (feePlansAdded) data.feeStructures = [...data.feeStructures, ...standardFeePlans.map((plan,index) => ({ id:`standard-fees-2027-${index + 1}`, ...plan, academicYear:'2027', updatedAt:new Date().toISOString(), setBy:'School fee schedule' }))]
     data.feeAdjustments ??= []
     data.leaveRequests ??= []
     data.staffAttendance ??= []
