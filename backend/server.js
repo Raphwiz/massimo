@@ -206,6 +206,8 @@ function clearAttempts(request, key) {
 }
 
 function sessionCookieNameForRole(role) { return `${sessionCookiePrefix}${String(role || '').replace(/[^a-z-]/g, '')}_session` }
+function accountRoles(account) { return Array.from(new Set(Array.isArray(account?.roles) && account.roles.length ? account.roles : [account?.role].filter(Boolean))) }
+function accountHasRole(account, role) { return accountRoles(account).includes(role) }
 
 function requestedSessionRole(request) {
   const role = String(request.headers['x-portal-role'] || '').trim()
@@ -215,9 +217,8 @@ function requestedSessionRole(request) {
 function createSession(response, account) {
   const token = randomBytes(32).toString('base64url')
   sessions.set(token, { accountId: account.id, expiresAt: Date.now() + sessionDurationMs })
-  const cookie = [`${sessionCookieNameForRole(account.role)}=${token}`, 'HttpOnly', 'SameSite=Lax', 'Path=/', `Max-Age=${Math.floor(sessionDurationMs / 1000)}`]
-  if (isProduction) cookie.push('Secure')
-  response.setHeader('Set-Cookie', cookie.join('; '))
+  const cookies = accountRoles(account).map(role => { const cookie = [`${sessionCookieNameForRole(role)}=${token}`, 'HttpOnly', 'SameSite=Lax', 'Path=/', `Max-Age=${Math.floor(sessionDurationMs / 1000)}`]; if (isProduction) cookie.push('Secure'); return cookie.join('; ') })
+  response.setHeader('Set-Cookie', cookies)
 }
 
 function clearSession(request, response) {
@@ -233,7 +234,7 @@ function sessionAccount(request, data) {
   const session = token && sessions.get(token)
   if (!session || session.expiresAt <= Date.now()) { if (token) sessions.delete(token); return null }
   const account = data.accounts.find(item => item.id === session.accountId && item.active !== false)
-  if (!account || (role && account.role !== role)) { sessions.delete(token); return null }
+  if (!account || (role && !accountHasRole(account, role))) { sessions.delete(token); return null }
   return account
 }
 
@@ -286,7 +287,7 @@ function requireAccess(request, response, data, url) {
   if (!roles.length) { send(response, 404, { error: 'Endpoint not found.' }); return false }
   const account = sessionAccount(request, data)
   if (!account) { send(response, 401, { error: 'Please sign in to continue.' }); return false }
-  if (!roles.includes(account.role)) { send(response, 403, { error: 'You do not have permission to access this resource.' }); return false }
+  if (!roles.some(role => accountHasRole(account, role))) { send(response, 403, { error: 'You do not have permission to access this resource.' }); return false }
   if (account.mustChangePassword && url.pathname !== '/api/auth/change-password' && url.pathname !== '/api/auth/logout') { send(response, 403, { error: 'Change your temporary password before accessing the portal.' }); return false }
   request.account = account
   return true
@@ -342,7 +343,7 @@ function verifyActivationCode(code, account) {
 
 function portalAccountForClient(account) {
   return {
-    id: account.id, identifier: account.identifier, role: account.role, name: account.name, title: account.title || '', parentPhone: account.parentPhone || '', active: account.active !== false,
+    id: account.id, identifier: account.identifier, role: account.role, roles: accountRoles(account), name: account.name, title: account.title || '', parentPhone: account.parentPhone || '', active: account.active !== false,
     createdAt: account.createdAt || '', activatedAt: account.activatedAt || '', passwordChangedAt: account.passwordChangedAt || '',
     activationPending: Boolean(account.activationExpiresAt && Date.parse(account.activationExpiresAt) > Date.now()), activationExpiresAt: account.activationExpiresAt || ''
   }
@@ -605,15 +606,15 @@ const server = createServer(async (request, response) => {
       const identifier = portal === 'parent' ? normalisePhone(input.identifier) : text(input.identifier, 120).toLowerCase()
       const password = typeof input.password === 'string' ? input.password : ''
       const account = data.accounts.find(item => item.identifier === identifier && item.active !== false)
-      if (!account || !password || !verifyPassword(password, account) || (portal === 'parent' && account.role !== 'parent') || (portal === 'staff' && (account.role === 'parent' || account.role === 'system-admin')) || (portal === 'system-admin' && account.role !== 'system-admin')) {
+      if (!account || !password || !verifyPassword(password, account) || (portal === 'parent' && !accountHasRole(account, 'parent')) || (portal === 'staff' && (accountHasRole(account, 'parent') || accountHasRole(account, 'system-admin'))) || (portal === 'system-admin' && !accountHasRole(account, 'system-admin'))) {
         recordFailedAttempt(request, 'login', 15 * 60_000)
         return send(response, 401, { error: 'The sign-in details are not recognised. Please try again or contact the school office.' })
       }
       clearAttempts(request, 'login')
       createSession(response, account)
-      return send(response, 200, { id: account.id, role: account.role, name: account.name, title: account.title, parentPhone: account.parentPhone || '', mustChangePassword: Boolean(account.mustChangePassword) })
+      return send(response, 200, { id: account.id, role: account.role, roles: accountRoles(account), name: account.name, title: account.title, parentPhone: account.parentPhone || '', mustChangePassword: Boolean(account.mustChangePassword) })
     }
-    if (request.method === 'GET' && url.pathname === '/api/auth/session') return send(response, 200, { id: request.account.id, role: request.account.role, name: request.account.name, title: request.account.title || '', parentPhone: request.account.parentPhone || '', mustChangePassword: Boolean(request.account.mustChangePassword) })
+    if (request.method === 'GET' && url.pathname === '/api/auth/session') return send(response, 200, { id: request.account.id, role: requestedSessionRole(request) || request.account.role, roles: accountRoles(request.account), name: request.account.name, title: request.account.title || '', parentPhone: request.account.parentPhone || '', mustChangePassword: Boolean(request.account.mustChangePassword) })
     if (request.method === 'POST' && url.pathname === '/api/auth/activate') {
       if (signInRateLimited(request, 'activation', 8, 15 * 60_000)) return send(response, 429, { error: 'Too many activation attempts. Please wait 15 minutes before trying again.' })
       const input = await body(request)
@@ -636,7 +637,7 @@ const server = createServer(async (request, response) => {
       data.accounts = data.accounts.map(item => item.id === account.id ? updatedAccount : item)
       await saveData(data)
       createSession(response, updatedAccount)
-      return send(response, 200, { role: updatedAccount.role, name: updatedAccount.name, title: updatedAccount.title, parentPhone: updatedAccount.parentPhone || '', mustChangePassword: false })
+      return send(response, 200, { role: updatedAccount.role, roles: accountRoles(updatedAccount), name: updatedAccount.name, title: updatedAccount.title, parentPhone: updatedAccount.parentPhone || '', mustChangePassword: false })
     }
     if (request.method === 'POST' && url.pathname === '/api/auth/logout') {
       const token = parseCookies(request)[sessionCookieNameForRole(requestedSessionRole(request))]
@@ -716,6 +717,17 @@ const server = createServer(async (request, response) => {
       const updatedAccount = { ...account, active: input.active === true }
       data.accounts = data.accounts.map(item => item.id === id ? updatedAccount : item)
       if (!updatedAccount.active) for (const [token, session] of sessions) if (session.accountId === id) sessions.delete(token)
+      await saveData(data)
+      return send(response, 200, { account: portalAccountForClient(updatedAccount) })
+    }
+    if (request.method === 'PUT' && /^\/api\/accounts\/[^/]+\/roles$/.test(url.pathname)) {
+      if (request.account.role !== 'system-admin') return send(response, 403, { error: 'Only the System Administrator can grant additional portal roles.' })
+      const id = decodeURIComponent(url.pathname.split('/')[3]); const input = await body(request); const role = text(input.role, 20); const account = data.accounts.find(item => item.id === id)
+      if (!account) return send(response, 404, { error: 'Portal account not found.' })
+      if (role !== 'bursar' || !accountHasRole(account, 'secretary')) return send(response, 400, { error: 'Only Secretary accounts can be granted delegated Bursar access here.' })
+      const updatedAccount = { ...account, roles: Array.from(new Set([...accountRoles(account), 'bursar'])), title: account.title || 'Secretary / Bursar' }
+      data.accounts = data.accounts.map(item => item.id === id ? updatedAccount : item)
+      data.accountAudit.push({ id:`audit-${Date.now()}`, action:'delegated-bursar-access-granted', accountId:id, accountName:account.name, performedBy:request.account.id, createdAt:new Date().toISOString() })
       await saveData(data)
       return send(response, 200, { account: portalAccountForClient(updatedAccount) })
     }
