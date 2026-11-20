@@ -102,6 +102,7 @@ export const createParentPaymentReport = (report) => request('/api/parent/paymen
 export const getParentMessages = (phone = '') => request(`/api/parent/messages?phone=${encodeURIComponent(phone)}`)
 export const createParentMessage = (message) => request('/api/parent/messages', { method: 'POST', body: JSON.stringify(message) })
 export const getFinanceLearners = () => request('/api/finance/learners')
+export const getSecretaryFeeLookup = (query) => request(`/api/secretary/fee-lookup?query=${encodeURIComponent(query || '')}`)
 export const getDefaulters = () => request('/api/finance/defaulters')
 export const getBudgetSummary = () => request('/api/finance/budget-summary')
 export const getFinanceAudit = () => request('/api/finance/audit')

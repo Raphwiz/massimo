@@ -252,6 +252,7 @@ function routeRoles(method, path) {
   if (path === '/api/parent-portal') return ['secretary', 'system-admin']
   if (path === '/api/finance/approval-requests') return method === 'POST' ? ['bursar'] : ['bursar', 'headteacher']
   if (path.startsWith('/api/finance/approval-requests/')) return ['headteacher']
+  if (path === '/api/secretary/fee-lookup') return ['secretary']
   if (path.startsWith('/api/finance/')) return ['bursar']
   if (path === '/api/parent/learners' || path === '/api/parent/payment-reports') return ['parent']
   if (path === '/api/parent/messages') return method === 'POST' ? ['parent'] : ['parent', 'teacher', 'secretary']
@@ -909,6 +910,7 @@ const server = createServer(async (request, response) => {
       }))
       return send(response, 200, learners)
     }
+    if (request.method === 'GET' && url.pathname === '/api/secretary/fee-lookup') { const needle=String(url.searchParams.get('query')||'').trim().toLowerCase(); if(needle.length<2)return send(response,400,{error:'Enter at least two characters to search learner balances.'}); const compact=needle.replace(/\s+/g,''); const learners=data.admissions.filter(item=>[item.learnerName,item.admissionNumber,item.guardianPhone].some(value=>String(value||'').toLowerCase().replace(/\s+/g,'').includes(compact))).slice(0,8).map(item=>({id:item.id,learnerName:item.learnerName,admissionNumber:item.admissionNumber,guardianPhone:item.guardianPhone,className:item.placement?.className||item.grade,finance:currentFeeSummary(data,item)}));return send(response,200,learners) }
     if (request.method === 'GET' && url.pathname === '/api/finance/learners') {
       const learners = data.admissions.map(application => ({
         id: application.id,
