@@ -1350,12 +1350,13 @@ const server = createServer(async (request, response) => {
     if (request.method === 'POST' && url.pathname === '/api/fee-structures') {
       const input = await body(request)
       const grade = text(input.grade, 20)
+      const residency = learnerResidencies.has(text(input.residency, 20)) ? text(input.residency, 20) : 'Day scholar'
       const academicYear = text(input.academicYear, 10)
       const term = text(input.term, 20)
       const amount = Number(input.amount)
       if (!schoolGrades.has(grade) || !/^\d{4}$/.test(academicYear) || !term || !Number.isFinite(amount) || amount < 0) return send(response, 400, { error: 'Choose a grade, academic year, term, and valid fee amount.' })
-      const structure = { id: `fees-${Date.now()}`, grade, academicYear, term, amount, updatedAt: new Date().toISOString(), setBy: 'Bursar' }
-      data.feeStructures = [...data.feeStructures.filter(item => !(item.grade === grade && item.term === term && item.academicYear === academicYear)), structure]; addFinanceAudit(data,request,'Changed','Fee plan',structure.id,`${grade} · ${term} ${academicYear} · ${money(amount)}`)
+      const structure = { id: `fees-${Date.now()}`, grade, residency, academicYear, term, amount, updatedAt: new Date().toISOString(), setBy: 'Bursar' }
+      data.feeStructures = [...data.feeStructures.filter(item => !(item.grade === grade && (item.residency || 'Day scholar') === residency && item.term === term && item.academicYear === academicYear)), structure]; addFinanceAudit(data,request,'Changed','Fee plan',structure.id,`${grade} · ${residency} · ${term} ${academicYear} · ${money(amount)}`)
       await saveData(data)
       return send(response, 201, structure)
     }
