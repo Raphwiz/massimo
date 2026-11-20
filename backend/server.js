@@ -491,7 +491,9 @@ function placementSuggestions(data, academicYear) {
     const phone = normalisePhone(learner.guardianPhone)
     if (phone) byPhone.set(phone, [...(byPhone.get(phone) || []), learner])
   }
-  const unplaced = data.admissions.filter(learner => !learner.placement).sort((a, b) => `${a.grade}|${a.learnerName}`.localeCompare(`${b.grade}|${b.learnerName}`))
+  const unplaced = data.admissions
+    .filter(learner => !learner.placement && learner.completionStatus !== 'Completed / Alumni')
+    .sort((a, b) => `${a.grade}|${a.learnerName}`.localeCompare(`${b.grade}|${b.learnerName}`))
   return unplaced.map(learner => {
     const candidates = activeClasses.filter(item => item.grade === learner.grade && (occupancy.get(item.id) || 0) < item.capacity)
     const siblings = byPhone.get(normalisePhone(learner.guardianPhone)) || []
