@@ -467,6 +467,7 @@ function nextReceiptNumber(issuedAt, receipts) {
 
 const defaultClassCapacity = 35
 const schoolGrades = new Set(['Pre-Primary', 'PP1', 'PP2', ...Array.from({ length: 9 }, (_, index) => `Grade ${index + 1}`)])
+const learnerResidencies = new Set(['Day scholar', 'Boarder'])
 const classStatuses = new Set(['Active', 'Inactive'])
 const placementDecisions = new Set(['Pending headteacher approval', 'Confirmed', 'Waitlisted'])
 const attendanceStatuses = new Set(['Present', 'Absent', 'Late', 'Excused'])
@@ -1410,13 +1411,13 @@ const server = createServer(async (request, response) => {
     if (request.method === 'POST' && url.pathname === '/api/admissions') {
       const input = await body(request)
       const createdAt = new Date().toISOString()
-      const fatherName = text(input.fatherName, 100), fatherPhone = text(input.fatherPhone, 20), motherName = text(input.motherName, 100), motherPhone = text(input.motherPhone, 20)
+      const fatherName = text(input.fatherName, 100), fatherPhone = text(input.fatherPhone, 20), motherName = text(input.motherName, 100), motherPhone = text(input.motherPhone, 20), residency = learnerResidencies.has(text(input.residency, 20)) ? text(input.residency, 20) : 'Day scholar'
       const primaryName = motherName || fatherName, primaryPhone = motherPhone || fatherPhone, primaryRelationship = motherName ? 'Mother / guardian' : 'Father / guardian'
       const application = {
         id: `admission-${Date.now()}`,
         admissionNumber: nextAdmissionNumber(createdAt, data.admissions),
         learnerName: text(input.learnerName, 100),
-        grade: text(input.grade, 20),
+        grade: text(input.grade, 20), residency,
         fatherName, fatherPhone, motherName, motherPhone,
         guardianName: primaryName,
         guardianPhone: primaryPhone,
@@ -1592,7 +1593,7 @@ const server = createServer(async (request, response) => {
         admissionNumber: requestedAdmissionNumber || existing.admissionNumber,
         admissionNumberVerified: requestedAdmissionNumber && requestedAdmissionNumber !== existing.admissionNumber ? true : Boolean(existing.admissionNumberVerified),
         learnerName: text(input.learnerName, 100),
-        grade: text(input.grade, 20),
+        grade: text(input.grade, 20), residency: learnerResidencies.has(text(input.residency, 20)) ? text(input.residency, 20) : (existing.residency || 'Day scholar'),
         fatherName, fatherPhone, motherName, motherPhone,
         guardianName: primaryName,
         guardianPhone: primaryPhone,
