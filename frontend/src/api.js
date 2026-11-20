@@ -32,7 +32,7 @@ export const createPortalAccount = (details) => request('/api/accounts', { metho
 export const createParentPortal = (admissionId) => request('/api/parent-portal', { method: 'POST', body: JSON.stringify({ admissionId }) })
 export const resetPortalAccount = (id) => request(`/api/accounts/${encodeURIComponent(id)}/reset`, { method: 'POST', body: JSON.stringify({}) })
 export const setPortalAccountStatus = (id, active) => request(`/api/accounts/${encodeURIComponent(id)}/status`, { method: 'PUT', body: JSON.stringify({ active }) })
-export const grantPortalBursarAccess = (id) => request(`/api/accounts/${encodeURIComponent(id)}/roles`, { method: 'PUT', body: JSON.stringify({ role: 'bursar' }) })
+export const updatePortalAccountRole = (id, role, action = 'grant') => request(`/api/accounts/${encodeURIComponent(id)}/roles`, { method: 'PUT', body: JSON.stringify({ role, action }) })
 export const deletePortalAccount = (id) => request(`/api/accounts/${encodeURIComponent(id)}`, { method: 'DELETE' })
 export const getSystemAdminOverview = () => request('/api/system-admin/overview')
 export const getHeadteacherDashboard = () => request('/api/headteacher/dashboard')

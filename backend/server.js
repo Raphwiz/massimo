@@ -731,12 +731,15 @@ const server = createServer(async (request, response) => {
     }
     if (request.method === 'PUT' && /^\/api\/accounts\/[^/]+\/roles$/.test(url.pathname)) {
       if (request.account.role !== 'system-admin') return send(response, 403, { error: 'Only the System Administrator can grant additional portal roles.' })
-      const id = decodeURIComponent(url.pathname.split('/')[3]); const input = await body(request); const role = text(input.role, 20); const account = data.accounts.find(item => item.id === id)
+      const id = decodeURIComponent(url.pathname.split('/')[3]); const input = await body(request); const role = text(input.role, 20); const action = text(input.action, 12) || 'grant'; const account = data.accounts.find(item => item.id === id)
       if (!account) return send(response, 404, { error: 'Portal account not found.' })
-      if (role !== 'bursar' || !accountHasRole(account, 'secretary')) return send(response, 400, { error: 'Only Secretary accounts can be granted delegated Bursar access here.' })
-      const updatedAccount = { ...account, roles: Array.from(new Set([...accountRoles(account), 'bursar'])), title: account.title || 'Secretary / Bursar' }
+      if (!['headteacher', 'secretary', 'bursar'].includes(role) || !['grant', 'revoke'].includes(action)) return send(response, 400, { error: 'Choose a valid portal role action.' })
+      if (action === 'revoke' && account.role === role) return send(response, 400, { error: 'The account’s primary role cannot be removed. Deactivate the account or assign a different primary profile instead.' })
+      const currentRoles = accountRoles(account)
+      const roles = action === 'grant' ? Array.from(new Set([...currentRoles, role])) : currentRoles.filter(item => item !== role)
+      const updatedAccount = { ...account, roles }
       data.accounts = data.accounts.map(item => item.id === id ? updatedAccount : item)
-      data.accountAudit.push({ id:`audit-${Date.now()}`, action:'delegated-bursar-access-granted', accountId:id, accountName:account.name, performedBy:request.account.id, createdAt:new Date().toISOString() })
+      data.accountAudit.push({ id:`audit-${Date.now()}`, action:`portal-role-${action}`, role, accountId:id, accountName:account.name, performedBy:request.account.id, createdAt:new Date().toISOString() })
       await saveData(data)
       return send(response, 200, { account: portalAccountForClient(updatedAccount) })
     }
