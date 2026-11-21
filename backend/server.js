@@ -554,7 +554,7 @@ async function createClassListPdf(data, schoolClass) {
   }
   learners.forEach((learner, index) => {
     const rowHeight = 15
-    if (y + rowHeight > 794) startPage()
+    if (y + rowHeight > 779) startPage()
     if (index % 2 === 0) document.rect(42, y, 511, rowHeight).fill('#EDF5FF')
     document.fillColor('#173662').font('Helvetica').fontSize(7.4).text(String(index + 1), 48, y + 4, { width: 24, align: 'center' })
     document.text(learner.admissionNumber || 'Pending', 78, y + 4, { width: 92 })
@@ -566,7 +566,7 @@ async function createClassListPdf(data, schoolClass) {
   const range = document.bufferedPageRange()
   for (let index = 0; index < range.count; index += 1) {
     document.switchToPage(range.start + index)
-    document.fillColor('#536B84').font('Helvetica').fontSize(7.5).text(`Official class register | ${schoolClass.className} | Page ${index + 1} of ${range.count}`, 42, 806, { width: 511, align: 'center' })
+    document.fillColor('#536B84').font('Helvetica').fontSize(7.5).text(`Official class register | ${schoolClass.className} | Page ${index + 1} of ${range.count}`, 42, 787, { width: 511, align: 'center' })
   }
   document.end()
   return finished
