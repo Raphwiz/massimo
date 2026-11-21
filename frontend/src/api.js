@@ -82,6 +82,10 @@ export const classListWorkbookUrl = (classId) => {
   const localApi = typeof window !== 'undefined' && ['localhost', '127.0.0.1'].includes(window.location.hostname) ? 'http://127.0.0.1:8787' : ''
   return `${localApi}/api/class-lists/workbook?classId=${encodeURIComponent(classId || '')}`
 }
+export const classListPdfUrl = (classId) => {
+  const localApi = typeof window !== 'undefined' && ['localhost', '127.0.0.1'].includes(window.location.hostname) ? 'http://127.0.0.1:8787' : ''
+  return `${localApi}/api/class-lists/pdf?classId=${encodeURIComponent(classId || '')}`
+}
 export const staffListWorkbookUrl = () => {
   const localApi = typeof window !== 'undefined' && ['localhost', '127.0.0.1'].includes(window.location.hostname) ? 'http://127.0.0.1:8787' : ''
   return `${localApi}/api/staff-list/workbook`

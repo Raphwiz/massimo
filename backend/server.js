@@ -268,7 +268,7 @@ function routeRoles(method, path) {
   if (path === '/api/school-classes') return method === 'GET' ? ['headteacher', 'secretary', 'teacher'] : ['headteacher', 'secretary']
   if (path.startsWith('/api/school-classes/')) return ['headteacher']
   if (path === '/api/class-placements' || path === '/api/class-placements/suggestions' || path === '/api/class-placements/auto-place') return ['headteacher', 'secretary']
-  if (path === '/api/class-lists/workbook') return ['secretary', 'teacher']
+  if (path === '/api/class-lists/workbook' || path === '/api/class-lists/pdf') return ['secretary', 'teacher']
   if (path === '/api/staff-list/workbook') return ['secretary']
   if (path === '/api/staff' || path === '/api/staff-attendance' || path === '/api/promotions') return ['headteacher']
   if (path === '/api/academics') return ['headteacher', 'teacher']
@@ -521,6 +521,57 @@ function addFinanceAudit(data, request, action, recordType, recordId, detail = '
 
 const money = value => `KES ${Number(value || 0).toLocaleString('en-KE')}`
 const safePdfName = value => String(value || 'learner').replace(/[^a-z0-9_-]+/gi, '_').replace(/^_+|_+$/g, '')
+async function createClassListPdf(data, schoolClass) {
+  const learners = data.admissions
+    .filter(item => item.placement?.className === schoolClass.className && item.placement?.academicYear === schoolClass.academicYear)
+    .slice().sort((a, b) => a.learnerName.localeCompare(b.learnerName))
+  const classTeachers = [...new Set(data.teacherAssignments.filter(item => item.classId === schoolClass.id).map(item => item.staffName).filter(Boolean))]
+  const teacherName = classTeachers.length ? classTeachers.join(', ') : 'Not assigned'
+  let crest = null
+  try { crest = await readFile(crestPath) } catch { /* The register remains usable if the crest asset is unavailable. */ }
+  const chunks = []; const document = new PDFDocument({ size: 'A4', margin: 42, bufferPages: true, autoFirstPage: false })
+  document.on('data', chunk => chunks.push(chunk))
+  const finished = new Promise((resolve, reject) => { document.on('end', () => resolve(Buffer.concat(chunks))); document.on('error', reject) })
+  const generated = new Intl.DateTimeFormat('en-KE', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Africa/Nairobi' }).format(new Date())
+  let y = 0
+  const startPage = () => {
+    document.addPage()
+    if (crest) document.image(crest, 42, 34, { fit: [55, 55] })
+    document.fillColor('#173662').font('Helvetica-Bold').fontSize(16).text("ST. DOROTHY'S SCHOOL MASSIMO", 110, 40)
+    document.font('Helvetica').fontSize(8.5).fillColor('#536B84').text('P.O. Box 36-60607, Mikinduri, Meru, Kenya | +254 722 841 569', 110, 64).text('stdorothysschoolmassimo@gmail.com | We lead by example', 110, 77)
+    document.moveTo(42, 103).lineTo(553, 103).stroke('#D8A20C')
+    document.fillColor('#173662').font('Helvetica-Bold').fontSize(13).text(`CLASS LIST - ${schoolClass.className.toUpperCase()}`, 42, 118)
+    document.font('Helvetica').fontSize(8.5).fillColor('#536B84').text(`Academic year: ${schoolClass.academicYear}   |   Class teacher: ${teacherName}   |   Generated: ${generated}`, 42, 136, { width: 511 })
+    const headerY = 158
+    document.rect(42, headerY, 511, 22).fill('#173662')
+    document.fillColor('#FFFFFF').font('Helvetica-Bold').fontSize(8).text('NO.', 48, headerY + 7).text('ADMISSION NO.', 78, headerY + 7).text('LEARNER NAME', 177, headerY + 7).text('PARENT / GUARDIAN CONTACT', 355, headerY + 7)
+    y = headerY + 22
+  }
+  startPage()
+  if (!learners.length) {
+    document.fillColor('#536B84').font('Helvetica').fontSize(10).text('No learners are currently placed in this class stream.', 42, y + 24, { width: 511, align: 'center' })
+  }
+  learners.forEach((learner, index) => {
+    const rowHeight = 32
+    if (y + rowHeight > 778) startPage()
+    if (index % 2 === 0) document.rect(42, y, 511, rowHeight).fill('#F5F8FC')
+    document.fillColor('#173662').font('Helvetica').fontSize(8.5).text(String(index + 1), 48, y + 10, { width: 24, align: 'center' })
+    document.text(learner.admissionNumber || 'Pending', 78, y + 10, { width: 92 })
+    document.font('Helvetica-Bold').text(learner.learnerName, 177, y + 6, { width: 168, height: 20 })
+    const guardian = learner.guardianName || learner.fatherName || learner.motherName || 'Not recorded'
+    const phone = learner.guardianPhone || learner.motherPhone || learner.fatherPhone || 'No phone recorded'
+    document.font('Helvetica').text(`${guardian}\n${phone}`, 355, y + 5, { width: 191, height: 25, lineGap: 1 })
+    document.strokeColor('#DCE5EF').lineWidth(0.5).moveTo(42, y + rowHeight).lineTo(553, y + rowHeight).stroke()
+    y += rowHeight
+  })
+  const range = document.bufferedPageRange()
+  for (let index = 0; index < range.count; index += 1) {
+    document.switchToPage(range.start + index)
+    document.fillColor('#536B84').font('Helvetica').fontSize(7.5).text(`Official class register | ${schoolClass.className} | Page ${index + 1} of ${range.count}`, 42, 806, { width: 511, align: 'center' })
+  }
+  document.end()
+  return finished
+}
 async function createFeeStatementPdf(data, learner) {
   const finance = currentFeeSummary(data, learner); const receipts = data.receipts.filter(item => item.admissionId === learner.id).slice().sort((a, b) => String(a.issuedAt).localeCompare(String(b.issuedAt)))
   const statementNumber = `SD/STM/${new Date().getFullYear()}/${learner.admissionNumber || learner.id}`; const generatedAt = new Date(); const payBy = new Date(generatedAt); payBy.setDate(payBy.getDate() + 14)
@@ -888,6 +939,16 @@ const server = createServer(async (request, response) => {
         'Content-Disposition': `attachment; filename="${fileName}"`
       })
       return response.end(Buffer.from(workbookBytes))
+    }
+    if (request.method === 'GET' && url.pathname === '/api/class-lists/pdf') {
+      const classId = text(url.searchParams.get('classId'), 100)
+      const schoolClass = data.schoolClasses.find(item => item.id === classId)
+      if (!schoolClass) return send(response, 404, { error: 'Choose a valid class before preparing its list.' })
+      if (request.account.role === 'teacher' && !data.teacherAssignments.some(item => item.classId === schoolClass.id && item.staffName === request.account.name)) return send(response, 403, { error: 'You can print class lists only for your assigned classes.' })
+      const pdf = await createClassListPdf(data, schoolClass)
+      const fileName = `st_dorothy_${safePdfName(schoolClass.className)}_${safePdfName(schoolClass.academicYear)}_class_list.pdf`
+      response.writeHead(200, { 'Content-Type': 'application/pdf', 'Content-Disposition': `inline; filename="${fileName}"`, 'Cache-Control': 'no-store' })
+      return response.end(pdf)
     }
     if (request.method === 'GET' && url.pathname === '/api/class-lists/workbook') {
       const classId = text(url.searchParams.get('classId'), 100)
