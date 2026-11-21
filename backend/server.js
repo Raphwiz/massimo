@@ -537,29 +537,29 @@ async function createClassListPdf(data, schoolClass) {
   let y = 0
   const startPage = () => {
     document.addPage()
-    if (crest) document.image(crest, 274, 28, { fit: [47, 47] })
-    document.fillColor('#173662').font('Helvetica-Bold').fontSize(16).text("ST. DOROTHY'S SCHOOL MASSIMO", 42, 82, { width: 511, align: 'center' })
-    document.font('Helvetica').fontSize(8.5).fillColor('#536B84').text('P.O. Box 36-60607, Mikinduri, Meru, Kenya | +254 722 841 569', 42, 104, { width: 511, align: 'center' }).text('stdorothysschoolmassimo@gmail.com | We lead by example', 42, 117, { width: 511, align: 'center' })
-    document.moveTo(42, 137).lineTo(553, 137).stroke('#D8A20C')
-    document.fillColor('#1D5EAA').font('Helvetica-Bold').fontSize(13).text(`CLASS LIST - ${schoolClass.className.toUpperCase()}`, 42, 151, { width: 511, align: 'center' })
-    document.font('Helvetica').fontSize(8.5).fillColor('#536B84').text(`Academic year: ${schoolClass.academicYear}   |   Class teacher: ${teacherName}   |   Generated: ${generated}`, 42, 170, { width: 511, align: 'center' })
-    const headerY = 193
-    document.rect(42, headerY, 511, 23).fill('#1D5EAA')
-    document.fillColor('#FFFFFF').font('Helvetica-Bold').fontSize(8).text('NO.', 48, headerY + 7).text('ADMISSION NO.', 80, headerY + 7).text('LEARNER NAME', 180, headerY + 7).text('CATEGORY', 442, headerY + 7)
-    y = headerY + 22
+    if (crest) document.image(crest, 281, 18, { fit: [33, 33] })
+    document.fillColor('#173662').font('Helvetica-Bold').fontSize(14).text("ST. DOROTHY'S SCHOOL MASSIMO", 42, 56, { width: 511, align: 'center' })
+    document.font('Helvetica').fontSize(7.5).fillColor('#536B84').text('P.O. Box 36-60607, Mikinduri, Meru, Kenya | +254 722 841 569 | stdorothysschoolmassimo@gmail.com', 42, 74, { width: 511, align: 'center' }).text('We lead by example', 42, 86, { width: 511, align: 'center' })
+    document.moveTo(42, 102).lineTo(553, 102).stroke('#D8A20C')
+    document.fillColor('#1D5EAA').font('Helvetica-Bold').fontSize(12).text(`CLASS LIST - ${schoolClass.className.toUpperCase()}`, 42, 113, { width: 511, align: 'center' })
+    document.font('Helvetica').fontSize(7.5).fillColor('#536B84').text(`Academic year: ${schoolClass.academicYear}   |   Class teacher: ${teacherName}   |   Generated: ${generated}`, 42, 129, { width: 511, align: 'center' })
+    const headerY = 145
+    document.rect(42, headerY, 511, 18).fill('#1D5EAA')
+    document.fillColor('#FFFFFF').font('Helvetica-Bold').fontSize(7).text('NO.', 48, headerY + 5).text('ADMISSION NO.', 80, headerY + 5).text('LEARNER NAME', 180, headerY + 5).text('CATEGORY', 442, headerY + 5)
+    y = headerY + 18
   }
   startPage()
   if (!learners.length) {
     document.fillColor('#536B84').font('Helvetica').fontSize(10).text('No learners are currently placed in this class stream.', 42, y + 24, { width: 511, align: 'center' })
   }
   learners.forEach((learner, index) => {
-    const rowHeight = 32
-    if (y + rowHeight > 778) startPage()
+    const rowHeight = 15
+    if (y + rowHeight > 794) startPage()
     if (index % 2 === 0) document.rect(42, y, 511, rowHeight).fill('#EDF5FF')
-    document.fillColor('#173662').font('Helvetica').fontSize(8.5).text(String(index + 1), 48, y + 10, { width: 24, align: 'center' })
-    document.text(learner.admissionNumber || 'Pending', 78, y + 10, { width: 92 })
-    document.font('Helvetica-Bold').text(learner.learnerName, 180, y + 10, { width: 252, height: 16 })
-    document.font('Helvetica').text(learner.residency || 'Day scholar', 442, y + 10, { width: 103 })
+    document.fillColor('#173662').font('Helvetica').fontSize(7.4).text(String(index + 1), 48, y + 4, { width: 24, align: 'center' })
+    document.text(learner.admissionNumber || 'Pending', 78, y + 4, { width: 92 })
+    document.font('Helvetica-Bold').text(learner.learnerName, 180, y + 4, { width: 252, height: 10, ellipsis: true })
+    document.font('Helvetica').text(learner.residency || 'Day scholar', 442, y + 4, { width: 103 })
     document.strokeColor('#DCE5EF').lineWidth(0.5).moveTo(42, y + rowHeight).lineTo(553, y + rowHeight).stroke()
     y += rowHeight
   })
