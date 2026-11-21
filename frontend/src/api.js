@@ -111,6 +111,7 @@ export const createParentMessage = (message) => request('/api/parent/messages', 
 export const getFinanceLearners = () => request('/api/finance/learners')
 export const getSecretaryFeeLookup = (query) => request(`/api/secretary/fee-lookup?query=${encodeURIComponent(query || '')}`)
 export const getSecretaryLearnerRecords = () => request('/api/secretary/learner-records')
+export const updateLearnerResidencyBatch = (details) => request('/api/secretary/learner-records/residency', { method: 'POST', body: JSON.stringify(details) })
 export const learnerRecordPdfUrl = (admissionId) => {
   const localApi = typeof window !== 'undefined' && ['localhost', '127.0.0.1'].includes(window.location.hostname) ? 'http://127.0.0.1:8787' : ''
   return `${localApi}/api/secretary/learner-records/${encodeURIComponent(admissionId || '')}/pdf`

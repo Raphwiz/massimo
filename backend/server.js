@@ -254,7 +254,7 @@ function routeRoles(method, path) {
   if (path === '/api/finance/approval-requests') return method === 'POST' ? ['bursar'] : ['bursar', 'headteacher']
   if (path.startsWith('/api/finance/approval-requests/')) return ['headteacher']
   if (path === '/api/secretary/fee-lookup') return ['secretary']
-  if (path === '/api/secretary/learner-records' || /^\/api\/secretary\/learner-records\/[^/]+\/pdf$/.test(path)) return ['secretary']
+  if (path === '/api/secretary/learner-records' || path === '/api/secretary/learner-records/residency' || /^\/api\/secretary\/learner-records\/[^/]+\/pdf$/.test(path)) return ['secretary']
   if (path.startsWith('/api/finance/')) return ['bursar']
   if (path === '/api/parent/learners' || path === '/api/parent/payment-reports') return ['parent']
   if (path === '/api/parent/messages') return method === 'POST' ? ['parent'] : ['parent', 'teacher', 'secretary']
@@ -901,6 +901,19 @@ const server = createServer(async (request, response) => {
     }
     if (request.method === 'GET' && url.pathname === '/api/secretary/learner-records') {
       return send(response, 200, data.admissions.map(learner => ({ ...learner, finance: currentFeeSummary(data, learner) })))
+    }
+    if (request.method === 'POST' && url.pathname === '/api/secretary/learner-records/residency') {
+      const input = await body(request)
+      const residency = learnerResidencies.has(text(input.residency, 20)) ? text(input.residency, 20) : ''
+      const ids = Array.isArray(input.admissionIds) ? [...new Set(input.admissionIds.map(value => text(value, 100)).filter(Boolean))] : []
+      if (!residency || !ids.length || ids.length > 1000) return send(response, 400, { error: 'Select one or more learners and a valid learner category.' })
+      const selected = data.admissions.filter(learner => ids.includes(learner.id))
+      if (selected.length !== ids.length) return send(response, 400, { error: 'One or more selected learners could not be found.' })
+      const updatedAt = new Date().toISOString()
+      const selectedIds = new Set(ids)
+      data.admissions = data.admissions.map(learner => selectedIds.has(learner.id) ? { ...learner, residency, residencyUpdatedAt: updatedAt, residencyUpdatedBy: request.account.name, updatedAt } : learner)
+      await saveData(data)
+      return send(response, 200, { updated: ids.length, residency, updatedAt })
     }
     if (request.method === 'GET' && /^\/api\/secretary\/learner-records\/[^/]+\/pdf$/.test(url.pathname)) {
       const admissionId = decodeURIComponent(url.pathname.split('/')[4])
