@@ -1021,23 +1021,23 @@ const server = createServer(async (request, response) => {
       workbook.creator = 'St. Dorothy School Massimo'
       workbook.created = new Date()
       const sheet = workbook.addWorksheet('Class List', { views: [{ state: 'frozen', ySplit: 7 }] })
-      sheet.columns = [{ width: 7 }, { width: 19 }, { width: 30 }, { width: 28 }, { width: 18 }, { width: 18 }]
+      sheet.columns = [{ width: 7 }, { width: 19 }, { width: 38 }, { width: 20 }]
       const crestPath = join(root, 'frontend', 'public', 'assets', 'st-dorothy-crest-refined.png')
       try { const crest = workbook.addImage({ buffer: await readFile(crestPath), extension: 'png' }); sheet.addImage(crest, { tl: { col: 0, row: 0 }, ext: { width: 58, height: 58 } }) } catch { /* A valid workbook is still created if the logo asset is unavailable. */ }
-      sheet.mergeCells('B1:F1'); sheet.getCell('B1').value = "ST. DOROTHY'S SCHOOL MASSIMO"
+      sheet.mergeCells('B1:D1'); sheet.getCell('B1').value = "ST. DOROTHY'S SCHOOL MASSIMO"
       sheet.getCell('B1').font = { name: 'Aptos Display', size: 16, bold: true, color: { argb: 'FF123664' } }
       sheet.getCell('B1').alignment = { vertical: 'middle' }
-      sheet.mergeCells('B2:F2'); sheet.getCell('B2').value = 'P.O. Box 36-60607, Mikinduri, Meru, Kenya · +254 722 841 569 · stdorothysschoolmassimo@gmail.com'
+      sheet.mergeCells('B2:D2'); sheet.getCell('B2').value = 'P.O. Box 36-60607, Mikinduri, Meru, Kenya · +254 722 841 569 · stdorothysschoolmassimo@gmail.com'
       sheet.getCell('B2').font = { size: 9, color: { argb: 'FF536B84' } }; sheet.getCell('B2').alignment = { wrapText: true }
-      sheet.mergeCells('A4:F4'); sheet.getCell('A4').value = `CLASS LIST — ${schoolClass.className.toUpperCase()} · ${schoolClass.academicYear}`
+      sheet.mergeCells('A4:D4'); sheet.getCell('A4').value = `CLASS LIST — ${schoolClass.className.toUpperCase()} · ${schoolClass.academicYear}`
       sheet.getCell('A4').font = { size: 13, bold: true, color: { argb: 'FFFFFFFF' } }; sheet.getCell('A4').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF123664' } }; sheet.getCell('A4').alignment = { horizontal: 'center' }
-      sheet.mergeCells('A5:C5'); sheet.getCell('A5').value = `Class teacher: ${teacherName}`
-      sheet.mergeCells('D5:F5'); sheet.getCell('D5').value = `Generated: ${new Intl.DateTimeFormat('en-KE', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Africa/Nairobi' }).format(new Date())}`
-      for (const cell of ['A5', 'D5']) { sheet.getCell(cell).font = { bold: true, color: { argb: 'FF294A6E' } }; sheet.getCell(cell).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F6FB' } } }
-      const header = sheet.addRow(['No.', 'Admission No.', 'Learner name', 'Parent / guardian', 'Parent phone', 'Grade'])
+      sheet.mergeCells('A5:B5'); sheet.getCell('A5').value = `Class teacher: ${teacherName}`
+      sheet.mergeCells('C5:D5'); sheet.getCell('C5').value = `Generated: ${new Intl.DateTimeFormat('en-KE', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Africa/Nairobi' }).format(new Date())}`
+      for (const cell of ['A5', 'C5']) { sheet.getCell(cell).font = { bold: true, color: { argb: 'FF294A6E' } }; sheet.getCell(cell).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F6FB' } } }
+      const header = sheet.addRow(['No.', 'Admission No.', 'Learner name', 'Category'])
       header.font = { bold: true, color: { argb: 'FFFFFFFF' } }; header.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1D5EAA' } }; header.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true }
-      learners.forEach((learner, index) => { const row = sheet.addRow([index + 1, learner.admissionNumber || 'Pending', learner.learnerName, learner.guardianName || '—', learner.guardianPhone || '—', learner.grade || schoolClass.grade]); row.alignment = { vertical: 'middle', wrapText: true }; if (index % 2 === 1) row.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF6F9FC' } } })
-      if (!learners.length) { const row = sheet.addRow(['', '', 'No learners placed in this stream yet.', '', '', '']); row.font = { italic: true, color: { argb: 'FF60758C' } } }
+      learners.forEach((learner, index) => { const row = sheet.addRow([index + 1, learner.admissionNumber || 'Pending', learner.learnerName, learner.residency || 'Day scholar']); row.alignment = { vertical: 'middle', wrapText: true }; if (index % 2 === 1) row.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF6F9FC' } } })
+      if (!learners.length) { const row = sheet.addRow(['', '', 'No learners placed in this stream yet.', '']); row.font = { italic: true, color: { argb: 'FF60758C' } } }
       sheet.eachRow(row => row.eachCell(cell => { cell.border = { top: { style: 'thin', color: { argb: 'FFD9E4EF' } }, left: { style: 'thin', color: { argb: 'FFD9E4EF' } }, bottom: { style: 'thin', color: { argb: 'FFD9E4EF' } }, right: { style: 'thin', color: { argb: 'FFD9E4EF' } } } }))
       const bytes = await workbook.xlsx.writeBuffer()
       response.writeHead(200, { 'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'Content-Disposition': `attachment; filename="st_dorothy_${safeClass}_class_list_${schoolClass.academicYear}.xlsx"` })
