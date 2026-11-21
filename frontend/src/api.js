@@ -110,6 +110,11 @@ export const getParentMessages = (phone = '') => request(`/api/parent/messages?p
 export const createParentMessage = (message) => request('/api/parent/messages', { method: 'POST', body: JSON.stringify(message) })
 export const getFinanceLearners = () => request('/api/finance/learners')
 export const getSecretaryFeeLookup = (query) => request(`/api/secretary/fee-lookup?query=${encodeURIComponent(query || '')}`)
+export const getSecretaryLearnerRecords = () => request('/api/secretary/learner-records')
+export const learnerRecordPdfUrl = (admissionId) => {
+  const localApi = typeof window !== 'undefined' && ['localhost', '127.0.0.1'].includes(window.location.hostname) ? 'http://127.0.0.1:8787' : ''
+  return `${localApi}/api/secretary/learner-records/${encodeURIComponent(admissionId || '')}/pdf`
+}
 export const getDefaulters = () => request('/api/finance/defaulters')
 export const getBudgetSummary = () => request('/api/finance/budget-summary')
 export const getFinanceAudit = () => request('/api/finance/audit')

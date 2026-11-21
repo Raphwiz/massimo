@@ -254,6 +254,7 @@ function routeRoles(method, path) {
   if (path === '/api/finance/approval-requests') return method === 'POST' ? ['bursar'] : ['bursar', 'headteacher']
   if (path.startsWith('/api/finance/approval-requests/')) return ['headteacher']
   if (path === '/api/secretary/fee-lookup') return ['secretary']
+  if (path === '/api/secretary/learner-records' || /^\/api\/secretary\/learner-records\/[^/]+\/pdf$/.test(path)) return ['secretary']
   if (path.startsWith('/api/finance/')) return ['bursar']
   if (path === '/api/parent/learners' || path === '/api/parent/payment-reports') return ['parent']
   if (path === '/api/parent/messages') return method === 'POST' ? ['parent'] : ['parent', 'teacher', 'secretary']
@@ -536,15 +537,15 @@ async function createClassListPdf(data, schoolClass) {
   let y = 0
   const startPage = () => {
     document.addPage()
-    if (crest) document.image(crest, 42, 34, { fit: [55, 55] })
-    document.fillColor('#173662').font('Helvetica-Bold').fontSize(16).text("ST. DOROTHY'S SCHOOL MASSIMO", 110, 40)
-    document.font('Helvetica').fontSize(8.5).fillColor('#536B84').text('P.O. Box 36-60607, Mikinduri, Meru, Kenya | +254 722 841 569', 110, 64).text('stdorothysschoolmassimo@gmail.com | We lead by example', 110, 77)
-    document.moveTo(42, 103).lineTo(553, 103).stroke('#D8A20C')
-    document.fillColor('#173662').font('Helvetica-Bold').fontSize(13).text(`CLASS LIST - ${schoolClass.className.toUpperCase()}`, 42, 118)
-    document.font('Helvetica').fontSize(8.5).fillColor('#536B84').text(`Academic year: ${schoolClass.academicYear}   |   Class teacher: ${teacherName}   |   Generated: ${generated}`, 42, 136, { width: 511 })
-    const headerY = 158
-    document.rect(42, headerY, 511, 22).fill('#173662')
-    document.fillColor('#FFFFFF').font('Helvetica-Bold').fontSize(8).text('NO.', 48, headerY + 7).text('ADMISSION NO.', 78, headerY + 7).text('LEARNER NAME', 177, headerY + 7).text('PARENT / GUARDIAN CONTACT', 355, headerY + 7)
+    if (crest) document.image(crest, 274, 28, { fit: [47, 47] })
+    document.fillColor('#173662').font('Helvetica-Bold').fontSize(16).text("ST. DOROTHY'S SCHOOL MASSIMO", 42, 82, { width: 511, align: 'center' })
+    document.font('Helvetica').fontSize(8.5).fillColor('#536B84').text('P.O. Box 36-60607, Mikinduri, Meru, Kenya | +254 722 841 569', 42, 104, { width: 511, align: 'center' }).text('stdorothysschoolmassimo@gmail.com | We lead by example', 42, 117, { width: 511, align: 'center' })
+    document.moveTo(42, 137).lineTo(553, 137).stroke('#D8A20C')
+    document.fillColor('#1D5EAA').font('Helvetica-Bold').fontSize(13).text(`CLASS LIST - ${schoolClass.className.toUpperCase()}`, 42, 151, { width: 511, align: 'center' })
+    document.font('Helvetica').fontSize(8.5).fillColor('#536B84').text(`Academic year: ${schoolClass.academicYear}   |   Class teacher: ${teacherName}   |   Generated: ${generated}`, 42, 170, { width: 511, align: 'center' })
+    const headerY = 193
+    document.rect(42, headerY, 511, 23).fill('#1D5EAA')
+    document.fillColor('#FFFFFF').font('Helvetica-Bold').fontSize(8).text('NO.', 48, headerY + 7).text('ADMISSION NO.', 80, headerY + 7).text('LEARNER NAME', 180, headerY + 7).text('CATEGORY', 442, headerY + 7)
     y = headerY + 22
   }
   startPage()
@@ -554,13 +555,11 @@ async function createClassListPdf(data, schoolClass) {
   learners.forEach((learner, index) => {
     const rowHeight = 32
     if (y + rowHeight > 778) startPage()
-    if (index % 2 === 0) document.rect(42, y, 511, rowHeight).fill('#F5F8FC')
+    if (index % 2 === 0) document.rect(42, y, 511, rowHeight).fill('#EDF5FF')
     document.fillColor('#173662').font('Helvetica').fontSize(8.5).text(String(index + 1), 48, y + 10, { width: 24, align: 'center' })
     document.text(learner.admissionNumber || 'Pending', 78, y + 10, { width: 92 })
-    document.font('Helvetica-Bold').text(learner.learnerName, 177, y + 6, { width: 168, height: 20 })
-    const guardian = learner.guardianName || learner.fatherName || learner.motherName || 'Not recorded'
-    const phone = learner.guardianPhone || learner.motherPhone || learner.fatherPhone || 'No phone recorded'
-    document.font('Helvetica').text(`${guardian}\n${phone}`, 355, y + 5, { width: 191, height: 25, lineGap: 1 })
+    document.font('Helvetica-Bold').text(learner.learnerName, 180, y + 10, { width: 252, height: 16 })
+    document.font('Helvetica').text(learner.residency || 'Day scholar', 442, y + 10, { width: 103 })
     document.strokeColor('#DCE5EF').lineWidth(0.5).moveTo(42, y + rowHeight).lineTo(553, y + rowHeight).stroke()
     y += rowHeight
   })
@@ -569,6 +568,41 @@ async function createClassListPdf(data, schoolClass) {
     document.switchToPage(range.start + index)
     document.fillColor('#536B84').font('Helvetica').fontSize(7.5).text(`Official class register | ${schoolClass.className} | Page ${index + 1} of ${range.count}`, 42, 806, { width: 511, align: 'center' })
   }
+  document.end()
+  return finished
+}
+async function createLearnerRecordPdf(data, learner) {
+  const finance = currentFeeSummary(data, learner)
+  let crest = null
+  try { crest = await readFile(crestPath) } catch { /* The record remains usable if the crest asset is unavailable. */ }
+  const chunks = []; const document = new PDFDocument({ size: 'A4', margin: 42 })
+  document.on('data', chunk => chunks.push(chunk))
+  const finished = new Promise((resolve, reject) => { document.on('end', () => resolve(Buffer.concat(chunks))); document.on('error', reject) })
+  if (crest) document.image(crest, 274, 28, { fit: [47, 47] })
+  document.fillColor('#173662').font('Helvetica-Bold').fontSize(16).text("ST. DOROTHY'S SCHOOL MASSIMO", 42, 82, { width: 511, align: 'center' })
+  document.font('Helvetica').fontSize(8.5).fillColor('#536B84').text('P.O. Box 36-60607, Mikinduri, Meru, Kenya | +254 722 841 569', 42, 104, { width: 511, align: 'center' }).text('stdorothysschoolmassimo@gmail.com | We lead by example', 42, 117, { width: 511, align: 'center' })
+  document.moveTo(42, 137).lineTo(553, 137).stroke('#D8A20C')
+  document.fillColor('#1D5EAA').font('Helvetica-Bold').fontSize(14).text('LEARNER RECORD', 42, 151, { width: 511, align: 'center' })
+  document.font('Helvetica').fontSize(8.5).fillColor('#536B84').text(`Printed ${new Intl.DateTimeFormat('en-KE', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Africa/Nairobi' }).format(new Date())}`, 42, 172, { width: 511, align: 'center' })
+  const box = (title, rows, top) => {
+    const height = 30 + Math.ceil(rows.length / 2) * 39
+    document.roundedRect(42, top, 511, height, 7).fillAndStroke('#F7FAFD', '#DCE5EF')
+    document.fillColor('#173662').font('Helvetica-Bold').fontSize(10).text(title, 56, top + 13)
+    rows.forEach(([label, value], index) => {
+      const column = index % 2; const row = Math.floor(index / 2); const x = column ? 306 : 56; const y = top + 34 + row * 39
+      document.fillColor('#6B8099').font('Helvetica-Bold').fontSize(7.5).text(label.toUpperCase(), x, y)
+      document.fillColor('#173662').font('Helvetica').fontSize(9).text(value || 'Not recorded', x, y + 12, { width: 220 })
+    })
+    return top + height + 14
+  }
+  const father = learner.fatherName || learner.guardians?.find(item => /father/i.test(item.relationship || ''))?.name || ''
+  const fatherPhone = learner.fatherPhone || learner.guardians?.find(item => /father/i.test(item.relationship || ''))?.phone || ''
+  const mother = learner.motherName || learner.guardians?.find(item => /mother|guardian/i.test(item.relationship || ''))?.name || learner.guardianName || ''
+  const motherPhone = learner.motherPhone || learner.guardians?.find(item => /mother|guardian/i.test(item.relationship || ''))?.phone || learner.guardianPhone || ''
+  let y = box('Learner details', [['Learner name', learner.learnerName], ['Admission number', learner.admissionNumber], ['Grade / class', learner.placement?.className || learner.grade], ['Category', learner.residency || 'Day scholar'], ['Status', learner.status || 'Active'], ['Date of birth', learner.dateOfBirth || 'Not recorded']], 195)
+  y = box('Parent and guardian contacts', [["Father's name", father], ["Father's phone", fatherPhone], ['Mother / guardian', mother], ['Mother / guardian phone', motherPhone]], y)
+  y = box('Fee summary', [['Fee plan', finance.feeDue === null ? 'Not yet set' : money(finance.feeDue)], ['Payments recorded', money(finance.totalPaid)], ['Outstanding balance', finance.balance === null ? 'Not yet set' : money(finance.balance)], ['Fee period', finance.term || 'Current placement period']], y)
+  document.fillColor('#536B84').font('Helvetica-Oblique').fontSize(7.5).text('This computer-generated learner record is confidential and for authorised school use only.', 42, 790, { width: 511, align: 'center' })
   document.end()
   return finished
 }
@@ -864,6 +898,17 @@ const server = createServer(async (request, response) => {
     if (request.method === 'GET' && url.pathname === '/api/admissions') {
       if (admissionNumbersAdded || schoolClassesAdded) await saveData(data)
       return send(response, 200, data.admissions)
+    }
+    if (request.method === 'GET' && url.pathname === '/api/secretary/learner-records') {
+      return send(response, 200, data.admissions.map(learner => ({ ...learner, finance: currentFeeSummary(data, learner) })))
+    }
+    if (request.method === 'GET' && /^\/api\/secretary\/learner-records\/[^/]+\/pdf$/.test(url.pathname)) {
+      const admissionId = decodeURIComponent(url.pathname.split('/')[4])
+      const learner = data.admissions.find(item => item.id === admissionId)
+      if (!learner) return send(response, 404, { error: 'Learner record not found.' })
+      const pdf = await createLearnerRecordPdf(data, learner)
+      response.writeHead(200, { 'Content-Type': 'application/pdf', 'Content-Disposition': `inline; filename="st_dorothy_learner_record_${safePdfName(learner.admissionNumber || learner.id)}.pdf"`, 'Cache-Control': 'no-store' })
+      return response.end(pdf)
     }
     if (request.method === 'GET' && url.pathname === '/api/school-classes') {
       if (schoolClassesAdded) await saveData(data)
