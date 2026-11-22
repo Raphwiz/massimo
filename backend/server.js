@@ -1299,7 +1299,8 @@ const server = createServer(async (request, response) => {
       }
       const receipts = data.receipts.filter(isInPeriod)
       const totalCollected = receipts.reduce((total, receipt) => total + Number(receipt.amount || 0), 0)
-      const byMethod = ['M-Pesa', 'Bank', 'Cash'].map(method => {
+      const channels = ['M-Pesa', 'Equity Bank', 'DTB Bank', 'Trans Nation SACCO', 'Cash']
+      const byMethod = [...channels, ...[...new Set(receipts.map(receipt => receipt.paymentMethod).filter(method => method && !channels.includes(method)))]] .map(method => {
         const methodReceipts = receipts.filter(receipt => receipt.paymentMethod === method)
         return { method, count: methodReceipts.length, total: methodReceipts.reduce((total, receipt) => total + Number(receipt.amount || 0), 0) }
       })
