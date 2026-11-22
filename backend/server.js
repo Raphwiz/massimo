@@ -253,6 +253,9 @@ function routeRoles(method, path) {
   if (path === '/api/parent-portal') return ['secretary', 'system-admin']
   if (path === '/api/finance/approval-requests') return method === 'POST' ? ['bursar'] : ['bursar', 'headteacher']
   if (path.startsWith('/api/finance/approval-requests/')) return ['headteacher']
+  // The secretary may confirm a payment only after receiving the school's payment notification.
+  // Other finance operations remain restricted to the bursar.
+  if (path === '/api/finance/learners' || path === '/api/finance/receipts') return ['bursar', 'secretary']
   if (path === '/api/secretary/fee-lookup') return ['secretary']
   if (path === '/api/secretary/learner-records' || path === '/api/secretary/learner-records/residency' || /^\/api\/secretary\/learner-records\/[^/]+\/pdf$/.test(path)) return ['secretary']
   if (path.startsWith('/api/finance/')) return ['bursar']
@@ -1698,9 +1701,11 @@ const server = createServer(async (request, response) => {
       const amount = Number(input.amount)
       const paymentMethod = text(input.paymentMethod, 30)
       const paymentReference = text(input.paymentReference, 80)
+      const paymentDate = text(input.paymentDate, 10)
       if (!learner) return send(response, 404, { error: 'Select a valid learner account before issuing the receipt.' })
       if (!Number.isFinite(amount) || amount <= 0) return send(response, 400, { error: 'Enter a valid payment amount.' })
       if (!paymentMethod || !paymentReference) return send(response, 400, { error: 'Payment method and reference are required.' })
+      if (data.receipts.some(receipt => String(receipt.paymentMethod || '').toLowerCase() === paymentMethod.toLowerCase() && String(receipt.paymentReference || '').toLowerCase() === paymentReference.toLowerCase())) return send(response, 409, { error: 'This payment reference has already been confirmed. Check the saved receipts before recording it again.' })
       const issuedAt = new Date().toISOString()
       const receipt = {
         id: `receipt-${Date.now()}`,
@@ -1714,10 +1719,12 @@ const server = createServer(async (request, response) => {
         amount,
         paymentMethod,
         paymentReference,
+        paymentDate: /^\d{4}-\d{2}-\d{2}$/.test(paymentDate) ? paymentDate : issuedAt.slice(0, 10),
+        confirmationSource: 'Manual school notification',
         issuedAt
       }
       data.receipts.unshift(receipt)
-      addFinanceAudit(data,request,'Created','Receipt',receipt.id,`${receipt.receiptNumber} · ${receipt.learnerName} · ${money(amount)} · ${paymentMethod}`)
+      addFinanceAudit(data,request,'Confirmed','Manual payment',receipt.id,`${receipt.receiptNumber} · ${receipt.learnerName} · ${money(amount)} · ${paymentMethod} · ${paymentReference}`)
       await saveData(data)
       return send(response, 201, receipt)
     }
