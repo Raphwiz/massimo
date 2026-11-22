@@ -141,6 +141,7 @@ export const feeStatementPdfUrl = (admissionId) => `${financeDownloadBase()}/api
 export const feeStatementsBulkUrl = (className = '') => `${financeDownloadBase()}/api/finance/statements-bulk?className=${encodeURIComponent(className)}`
 export const getReceipts = () => request('/api/finance/receipts')
 export const createReceipt = (receipt) => request('/api/finance/receipts', { method: 'POST', body: JSON.stringify(receipt) })
+export const receiptPdfUrl = (receiptId) => `${financeDownloadBase()}/api/finance/receipts/${encodeURIComponent(receiptId || '')}/pdf`
 export const getMpesaTransactions = () => request('/api/finance/mpesa-transactions')
 export const createMpesaTransaction = (transaction) => request('/api/finance/mpesa-transactions', { method: 'POST', body: JSON.stringify(transaction) })
 export const reconcileMpesaTransaction = (id, payment) => request(`/api/finance/mpesa-transactions/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify(payment) })

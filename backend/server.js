@@ -255,7 +255,7 @@ function routeRoles(method, path) {
   if (path.startsWith('/api/finance/approval-requests/')) return ['headteacher']
   // The secretary may confirm a payment only after receiving the school's payment notification.
   // Other finance operations remain restricted to the bursar.
-  if (path === '/api/finance/learners' || path === '/api/finance/receipts') return ['bursar', 'secretary']
+  if (path === '/api/finance/learners' || path === '/api/finance/receipts' || /^\/api\/finance\/receipts\/[^/]+\/pdf$/.test(path)) return ['bursar', 'secretary']
   if (path === '/api/secretary/fee-lookup') return ['secretary']
   if (path === '/api/secretary/learner-records' || path === '/api/secretary/learner-records/residency' || /^\/api\/secretary\/learner-records\/[^/]+\/pdf$/.test(path)) return ['secretary']
   if (path.startsWith('/api/finance/')) return ['bursar']
@@ -719,6 +719,26 @@ async function createFeeStatementPdf(data, learner) {
   receipts.slice(0, 12).forEach(receipt => { document.text(String(receipt.issuedAt || '').slice(0, 10), 42, y).text(`${receipt.receiptNumber || ''}${receipt.paymentReference ? ` / ${receipt.paymentReference}` : ''}`, 125, y, { width: 180 }).text(receipt.paymentMethod || '', 315, y).text(money(receipt.amount), 440, y); y += 16 })
   const guidanceY = Math.max(y + 24, 455); document.fillColor('#173662').font('Helvetica-Bold').fontSize(10).text(`Payment guidance - Pay by ${payBy.toLocaleDateString('en-KE')}`, 42, guidanceY); document.font('Helvetica').fontSize(8.5).text('Use the learner name and grade as your account reference. Retain the payment confirmation for reconciliation.', 42, guidanceY + 16, { width: 500 }); document.font('Helvetica-Bold').fontSize(9).text('Official payment channels', 42, guidanceY + 42); document.font('Helvetica').fontSize(8.5).text('Equity Paybill 247247 - Account 803434#Learner Name/Grade', 42, guidanceY + 57).text('DTB Paybill 516600 - Account 808616#Learner Name/Grade', 42, guidanceY + 71).text('Trans Nation Paybill 507900 - Account 9000482#Learner Name/Grade', 42, guidanceY + 85).text('Bank: Equity Bank Meru A/C 0140296813439 | DTB Bank Meru A/C 0259364001', 42, guidanceY + 99, { width: 500 }).text('For help, contact the Bursar on +254 722 841 569.', 42, guidanceY + 113)
   document.fillColor('#536b84').fontSize(7.5).text('This is a computer-generated private fee statement. It is intended only for the learner’s parent or guardian.', 42, 760, { align: 'center', width: 510 }); document.end(); return finished
+}
+
+async function createReceiptPdf(receipt) {
+  const chunks = []; const document = new PDFDocument({ size: 'A5', margin: 36 }); document.on('data', chunk => chunks.push(chunk))
+  const finished = new Promise((resolve, reject) => { document.on('end', () => resolve(Buffer.concat(chunks))); document.on('error', reject) })
+  try { document.image(await readFile(crestPath), 44, 30, { fit: [45, 45] }) } catch { /* The receipt remains valid if the crest is unavailable. */ }
+  document.fillColor('#173662').font('Helvetica-Bold').fontSize(16).text("ST. DOROTHY'S SCHOOL MASSIMO", 102, 37)
+  document.font('Helvetica').fontSize(7.5).fillColor('#536B84').text('P.O. Box 36-60607, Mikinduri, Meru, Kenya · +254 722 841 569', 102, 59).text('stdorothysschoolmassimo@gmail.com · We lead by example', 102, 71)
+  document.moveTo(36, 94).lineTo(384, 94).stroke('#D8A20C')
+  document.fillColor('#1D5EAA').font('Helvetica-Bold').fontSize(13).text('OFFICIAL PAYMENT RECEIPT', 36, 110, { width: 348, align: 'center' })
+  document.font('Helvetica').fontSize(8).fillColor('#536B84').text(`Receipt no. ${receipt.receiptNumber}`, 36, 130, { width: 348, align: 'center' })
+  const row = (label, value, y, accent = false) => { document.roundedRect(36, y, 348, 37, 6).fillAndStroke(accent ? '#EEF6FF' : '#F8FAFC', '#DCE5EF'); document.fillColor('#6A8098').font('Helvetica-Bold').fontSize(7.5).text(label.toUpperCase(), 48, y + 8); document.fillColor('#173662').font('Helvetica-Bold').fontSize(10).text(value || '—', 48, y + 19, { width: 320 }) }
+  row('Learner', `${receipt.learnerName} · ${receipt.admissionNumber}`, 151)
+  row('Class', receipt.className || 'Not recorded', 197)
+  row('Payment channel', receipt.paymentMethod, 243)
+  row('Payment reference', receipt.paymentReference, 289)
+  row('Amount received', money(receipt.amount), 335, true)
+  row('Payment date', receipt.paymentDate || String(receipt.issuedAt || '').slice(0, 10), 381)
+  document.fillColor('#536B84').font('Helvetica').fontSize(7.5).text(`Confirmed ${new Intl.DateTimeFormat('en-KE', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Africa/Nairobi' }).format(new Date(receipt.issuedAt || Date.now()))}.`, 36, 436, { width: 348, align: 'center' })
+  document.text('Computer-generated receipt · Keep this for school-fee verification.', 36, 450, { width: 348, align: 'center' }); document.end(); return finished
 }
 
 function learnerAttendanceSummary(data, admissionId) {
@@ -1262,6 +1282,11 @@ const server = createServer(async (request, response) => {
       const finance = currentFeeSummary(data, learner)
       const receipts = data.receipts.filter(item => item.admissionId === learner.id).slice().sort((a, b) => String(a.issuedAt).localeCompare(String(b.issuedAt)))
       return send(response, 200, { statementNumber: `SD/STM/${new Date().getFullYear()}/${learner.admissionNumber || learner.id}`, generatedAt: new Date().toISOString(), learner: { learnerName: learner.learnerName, admissionNumber: learner.admissionNumber, grade: learner.grade, className: learner.placement?.className || learner.grade, guardianName: learner.guardianName, guardianPhone: learner.guardianPhone }, finance, receipts })
+    }
+    if (request.method === 'GET' && /^\/api\/finance\/receipts\/[^/]+\/pdf$/.test(url.pathname)) {
+      const receiptId = decodeURIComponent(url.pathname.split('/')[4]); const receipt = data.receipts.find(item => item.id === receiptId)
+      if (!receipt) return send(response, 404, { error: 'Payment receipt not found.' })
+      const pdf = await createReceiptPdf(receipt); response.writeHead(200, { 'Content-Type': 'application/pdf', 'Content-Disposition': `inline; filename="st_dorothy_receipt_${safePdfName(receipt.receiptNumber || receipt.id)}.pdf"` }); return response.end(pdf)
     }
     if (request.method === 'GET' && url.pathname === '/api/finance/receipts') return send(response, 200, data.receipts)
     if (request.method === 'GET' && url.pathname === '/api/finance/mpesa-transactions') return send(response, 200, data.mpesaTransactions)
