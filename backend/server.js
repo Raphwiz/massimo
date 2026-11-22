@@ -571,6 +571,57 @@ async function createClassListPdf(data, schoolClass) {
   document.end()
   return finished
 }
+async function createDefaulterListPdf(data, className = '') {
+  const rows = data.admissions
+    .map(learner => ({ learner, finance: currentFeeSummary(data, learner) }))
+    .filter(({ learner, finance }) => (!className || (learner.placement?.className || learner.grade) === className) && Number(finance.balance || 0) > 0)
+    .sort((a, b) => a.learner.learnerName.localeCompare(b.learner.learnerName))
+  let crest = null
+  try { crest = await readFile(crestPath) } catch { /* The report remains usable if the crest asset is unavailable. */ }
+  const chunks = []; const document = new PDFDocument({ size: 'A4', margin: 42, bufferPages: true, autoFirstPage: false })
+  document.on('data', chunk => chunks.push(chunk))
+  const finished = new Promise((resolve, reject) => { document.on('end', () => resolve(Buffer.concat(chunks))); document.on('error', reject) })
+  const generated = new Intl.DateTimeFormat('en-KE', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Africa/Nairobi' }).format(new Date())
+  const total = rows.reduce((sum, item) => sum + Number(item.finance.balance || 0), 0)
+  const reportClass = className || 'ALL CLASSES'
+  let y = 0
+  const startPage = () => {
+    document.addPage()
+    if (crest) document.image(crest, 281, 18, { fit: [33, 33] })
+    document.fillColor('#173662').font('Helvetica-Bold').fontSize(14).text("ST. DOROTHY'S SCHOOL MASSIMO", 42, 56, { width: 511, align: 'center' })
+    document.font('Helvetica').fontSize(7.5).fillColor('#536B84').text('P.O. Box 36-60607, Mikinduri, Meru, Kenya | +254 722 841 569 | stdorothysschoolmassimo@gmail.com', 42, 74, { width: 511, align: 'center' }).text('We lead by example', 42, 86, { width: 511, align: 'center' })
+    document.moveTo(42, 102).lineTo(553, 102).stroke('#D8A20C')
+    document.fillColor('#1D5EAA').font('Helvetica-Bold').fontSize(12).text(`OUTSTANDING FEE BALANCES - ${reportClass.toUpperCase()}`, 42, 113, { width: 511, align: 'center' })
+    document.font('Helvetica').fontSize(7.5).fillColor('#536B84').text(`Generated: ${generated}   |   Learners: ${rows.length}   |   Total outstanding: ${money(total)}`, 42, 129, { width: 511, align: 'center' })
+    const headerY = 145
+    document.rect(42, headerY, 511, 18).fill('#1D5EAA')
+    document.fillColor('#FFFFFF').font('Helvetica-Bold').fontSize(7).text('NO.', 48, headerY + 5).text('ADMISSION NO.', 80, headerY + 5).text('LEARNER NAME', 180, headerY + 5).text('CLASS', 340, headerY + 5).text('FEE DUE', 405, headerY + 5).text('PAID', 465, headerY + 5).text('BALANCE', 510, headerY + 5)
+    y = headerY + 18
+  }
+  startPage()
+  if (!rows.length) document.fillColor('#536B84').font('Helvetica').fontSize(10).text('No learners with outstanding balances were found.', 42, y + 24, { width: 511, align: 'center' })
+  rows.forEach(({ learner, finance }, index) => {
+    const rowHeight = 15
+    if (y + rowHeight > 779) startPage()
+    if (index % 2 === 0) document.rect(42, y, 511, rowHeight).fill('#EDF5FF')
+    document.fillColor('#173662').font('Helvetica').fontSize(7.2).text(String(index + 1), 48, y + 4, { width: 24, align: 'center' })
+    document.text(learner.admissionNumber || 'Pending', 78, y + 4, { width: 92 })
+    document.font('Helvetica-Bold').text(learner.learnerName, 180, y + 4, { width: 150, height: 10, ellipsis: true })
+    document.font('Helvetica').text(learner.placement?.className || learner.grade || '—', 340, y + 4, { width: 60, height: 10, ellipsis: true })
+    document.text(Number(finance.feeDue || 0).toLocaleString('en-KE'), 405, y + 4, { width: 55, align: 'right' })
+    document.text(Number(finance.totalPaid || 0).toLocaleString('en-KE'), 465, y + 4, { width: 40, align: 'right' })
+    document.font('Helvetica-Bold').fillColor('#933B3B').text(Number(finance.balance || 0).toLocaleString('en-KE'), 510, y + 4, { width: 37, align: 'right' })
+    document.strokeColor('#DCE5EF').lineWidth(0.5).moveTo(42, y + rowHeight).lineTo(553, y + rowHeight).stroke()
+    y += rowHeight
+  })
+  const range = document.bufferedPageRange()
+  for (let index = 0; index < range.count; index += 1) {
+    document.switchToPage(range.start + index)
+    document.fillColor('#536B84').font('Helvetica').fontSize(7.5).text(`Official defaulter register | ${reportClass} | Page ${index + 1} of ${range.count}`, 42, 787, { width: 511, align: 'center' })
+  }
+  document.end()
+  return finished
+}
 async function createLearnerRecordPdf(data, learner) {
   const finance = currentFeeSummary(data, learner)
   let crest = null
@@ -1118,6 +1169,7 @@ const server = createServer(async (request, response) => {
     if (request.method === 'POST' && url.pathname === '/api/finance/bank-deposits') { const input=await body(request);const amount=Number(input.amount);if(!Number.isFinite(amount)||amount<=0||!text(input.bank,80)||!text(input.slipNumber,80))return send(response,400,{error:'Enter the bank, deposit slip number, and a valid amount.'});const deposit={id:`deposit-${Date.now()}`,depositDate:text(input.depositDate,10)||new Date().toISOString().slice(0,10),bank:text(input.bank,80),slipNumber:text(input.slipNumber,80),amount,notes:text(input.notes,180),createdAt:new Date().toISOString(),createdBy:request.account.name};data.bankDeposits.unshift(deposit);data.accountAudit.unshift({id:`audit-${Date.now()}`,action:'Bank deposit recorded',by:request.account.name,createdAt:deposit.createdAt});addFinanceAudit(data,request,'Created','Bank deposit',deposit.id,`${deposit.bank} · ${deposit.slipNumber} · ${money(amount)}`);await saveData(data);return send(response,201,deposit) }
     if (request.method === 'POST' && url.pathname === '/api/finance/adjustments') { const input=await body(request);const learner=data.admissions.find(item=>item.id===text(input.admissionId,80));const amount=Number(input.amount);const placement=learner?.placement;if(!learner||!placement?.academicYear||!placement?.term||!Number.isFinite(amount)||amount<=0)return send(response,400,{error:'Choose a placed learner and valid bursary or discount amount.'});const requestItem={id:`approval-${Date.now()}`,type:'Bursary / discount',status:'Pending Headteacher approval',admissionId:learner.id,learnerName:learner.learnerName,admissionNumber:learner.admissionNumber,className:placement.className||learner.grade,academicYear:placement.academicYear,term:placement.term,amount,reason:text(input.reason,180)||'Bursary / approved discount',createdAt:new Date().toISOString(),requestedBy:request.account.name};data.financeApprovals.unshift(requestItem);addFinanceAudit(data,request,'Requested approval','Bursary / discount',requestItem.id,`${requestItem.learnerName} · ${money(amount)} · ${requestItem.term} ${requestItem.academicYear}`);await saveData(data);return send(response,201,requestItem) }
     if (request.method === 'PUT' && url.pathname.startsWith('/api/finance/approval-requests/')) { const id=decodeURIComponent(url.pathname.slice('/api/finance/approval-requests/'.length));const item=data.financeApprovals.find(entry=>entry.id===id);const input=await body(request);const decision=text(input.decision,12);if(!item)return send(response,404,{error:'Approval request not found.'});if(item.status!=='Pending Headteacher approval')return send(response,400,{error:'This request has already been decided.'});if(!['Approved','Rejected'].includes(decision))return send(response,400,{error:'Choose Approved or Rejected.'});item.status=decision;item.decidedAt=new Date().toISOString();item.decidedBy=request.account.name;item.decisionNote=text(input.decisionNote,180);if(decision==='Approved'&&item.type==='Bursary / discount'){const adjustment={id:`adjustment-${Date.now()}`,admissionId:item.admissionId,learnerName:item.learnerName,admissionNumber:item.admissionNumber,className:item.className,academicYear:item.academicYear,term:item.term,amount:item.amount,reason:item.reason,createdAt:item.decidedAt,createdBy:`Approved by ${request.account.name}`};data.feeAdjustments.unshift(adjustment);addFinanceAudit(data,request,'Approved','Bursary / discount',adjustment.id,`${item.learnerName} · ${money(item.amount)} · requested by ${item.requestedBy}`)}else addFinanceAudit(data,request,'Rejected','Bursary / discount',item.id,`${item.learnerName} · ${money(item.amount)} · ${item.decisionNote||'No reason recorded'}`);await saveData(data);return send(response,200,item) }
+    if (request.method === 'GET' && url.pathname === '/api/finance/defaulters/pdf') { const className = text(url.searchParams.get('className'), 80); const pdf = await createDefaulterListPdf(data, className); const fileName = `st_dorothy_defaulters_${safePdfName(className || 'all_classes')}.pdf`; response.writeHead(200, { 'Content-Type': 'application/pdf', 'Content-Disposition': `inline; filename="${fileName}"`, 'Cache-Control': 'no-store' }); return response.end(pdf) }
     if (request.method === 'GET' && url.pathname === '/api/finance/operations-workbook') { const className=text(url.searchParams.get('className'),80); const report=text(url.searchParams.get('report'),20)||'all'; if(!['all','defaulters','deposits','cashbook'].includes(report)) return send(response,400,{error:'Invalid finance report requested.'}); const workbook=new ExcelJS.Workbook();workbook.creator='St. Dorothy School Massimo';const addTitle=async(sheet,title,headers)=>{sheet.columns=headers.map(()=>({width:22}));try{const crest=workbook.addImage({buffer:await readFile(crestPath),extension:'png'});sheet.addImage(crest,{tl:{col:0,row:0},ext:{width:54,height:54}})}catch{}sheet.mergeCells(`B1:${String.fromCharCode(64+headers.length)}1`);sheet.getCell('B1').value="ST. DOROTHY'S SCHOOL MASSIMO";sheet.getCell('B1').font={bold:true,size:16,color:{argb:'173662'}};sheet.mergeCells(`B2:${String.fromCharCode(64+headers.length)}2`);sheet.getCell('B2').value=`${title} · Generated ${new Date().toLocaleString('en-KE')}`;sheet.getRow(4).values=headers;sheet.getRow(4).font={bold:true,color:{argb:'FFFFFF'}};sheet.getRow(4).fill={type:'pattern',pattern:'solid',fgColor:{argb:'1D5EAA'}};sheet.views=[{state:'frozen',ySplit:4}]};if(report==='all'||report==='defaulters'){const def=workbook.addWorksheet('Defaulters');await addTitle(def,'Outstanding fee balances',['Learner','Admission number','Class','Guardian','Phone','Fee due','Paid','Balance']);data.admissions.map(l=>({l,f:currentFeeSummary(data,l)})).filter(({l,f})=>(!className||(l.placement?.className||l.grade)===className)&&Number(f.balance||0)>0).forEach(({l,f})=>def.addRow([l.learnerName,l.admissionNumber,l.placement?.className||l.grade,l.guardianName,l.guardianPhone,f.feeDue||0,f.totalPaid||0,f.balance||0]))}if(report==='all'||report==='deposits'){const dep=workbook.addWorksheet('Bank Deposits');await addTitle(dep,'Bank deposits',['Date','Bank','Deposit slip','Amount (KES)','Notes','Recorded by']);data.bankDeposits.forEach(i=>dep.addRow([i.depositDate,i.bank,i.slipNumber,i.amount,i.notes,i.createdBy]))}if(report==='all'||report==='cashbook'){const cash=workbook.addWorksheet('Cashbook Expenses');await addTitle(cash,'Daily cashbook expenses',['Date','Type','Description','Reference','Amount (KES)','Recorded by']);data.cashbookEntries.filter(i=>i.type==='Cash out').forEach(i=>cash.addRow([i.date,i.type,i.description,i.reference,i.amount,i.createdBy]))}const filenames={all:'st_dorothy_finance_operations.xlsx',defaulters:`st_dorothy_defaulters_${safePdfName(className||'all_classes')}.xlsx`,deposits:'st_dorothy_bank_deposits.xlsx',cashbook:'st_dorothy_cashbook_expenses.xlsx'};const bytes=await workbook.xlsx.writeBuffer();response.writeHead(200,{'Content-Type':'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','Content-Disposition':`attachment; filename="${filenames[report]}"`});return response.end(Buffer.from(bytes)) }
     if (request.method === 'GET' && url.pathname === '/api/finance/statements-workbook') {
       const outstandingOnly = url.searchParams.get('outstanding') !== 'false'
