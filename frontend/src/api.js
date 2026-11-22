@@ -129,6 +129,8 @@ export const getBankDeposits = () => request('/api/finance/bank-deposits')
 export const createBankDeposit = (deposit) => request('/api/finance/bank-deposits', { method:'POST', body:JSON.stringify(deposit) })
 export const financeOperationsWorkbookUrl = (className='', report='all') => `${typeof window!=='undefined'&&['localhost','127.0.0.1'].includes(window.location.hostname)?'http://127.0.0.1:8787':''}/api/finance/operations-workbook?className=${encodeURIComponent(className)}&report=${encodeURIComponent(report)}`
 export const defaulterListPdfUrl = (className='') => `${typeof window!=='undefined'&&['localhost','127.0.0.1'].includes(window.location.hostname)?'http://127.0.0.1:8787':''}/api/finance/defaulters/pdf?className=${encodeURIComponent(className)}`
+export const expensesPdfUrl = () => `${typeof window!=='undefined'&&['localhost','127.0.0.1'].includes(window.location.hostname)?'http://127.0.0.1:8787':''}/api/finance/expenses/pdf`
+export const expensesWorkbookUrl = () => `${typeof window!=='undefined'&&['localhost','127.0.0.1'].includes(window.location.hostname)?'http://127.0.0.1:8787':''}/api/finance/expenses/workbook`
 export const getFeeStatement = (admissionId) => request(`/api/finance/statements/${encodeURIComponent(admissionId)}`)
 export const feeStatementsWorkbookUrl = (outstandingOnly = true) => {
   const localApi = typeof window !== 'undefined' && ['localhost', '127.0.0.1'].includes(window.location.hostname) ? 'http://127.0.0.1:8787' : ''
