@@ -595,7 +595,7 @@ async function createDefaulterListPdf(data, className = '') {
     document.font('Helvetica').fontSize(7.5).fillColor('#536B84').text(`Generated: ${generated}   |   Learners: ${rows.length}   |   Total outstanding: ${money(total)}`, 42, 129, { width: 511, align: 'center' })
     const headerY = 145
     document.rect(42, headerY, 511, 18).fill('#1D5EAA')
-    document.fillColor('#FFFFFF').font('Helvetica-Bold').fontSize(7).text('NO.', 48, headerY + 5).text('ADMISSION NO.', 80, headerY + 5).text('LEARNER NAME', 180, headerY + 5).text('CLASS', 340, headerY + 5).text('FEE DUE', 405, headerY + 5).text('PAID', 465, headerY + 5).text('BALANCE', 510, headerY + 5)
+    document.fillColor('#FFFFFF').font('Helvetica-Bold').fontSize(7).text('NO.', 48, headerY + 5).text('ADMISSION NO.', 80, headerY + 5).text('LEARNER NAME', 180, headerY + 5).text('CLASS', 340, headerY + 5).text('FEE DUE', 405, headerY + 5, { width: 55, align: 'right' }).text('PAID', 465, headerY + 5, { width: 40, align: 'right' }).text('BALANCE', 510, headerY + 5, { width: 37, align: 'right' })
     y = headerY + 18
   }
   startPage()
