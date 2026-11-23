@@ -551,6 +551,13 @@ function placementSuggestions(data, academicYear) {
 }
 
 function currentFeeSummary(data, application) {
+  const balanceImport = (data.feeBalanceImports || []).filter(item => item.admissionId === application.id && Number.isFinite(Number(item.balance))).sort((a, b) => String(b.importedAt).localeCompare(String(a.importedAt)))[0]
+  if (balanceImport) {
+    const importedAt = String(balanceImport.importedAt || '')
+    const totalPaid = data.receipts.filter(receipt => receipt.admissionId === application.id && (!importedAt || String(receipt.issuedAt || '') >= importedAt)).reduce((total, receipt) => total + Number(receipt.amount || 0), 0)
+    const feeDue = Math.max(0, Number(balanceImport.balance || 0))
+    return { feeDue, grossFeeDue: feeDue, bursaryAmount: 0, totalPaid, balance: Math.max(0, feeDue - totalPaid), term: 'Imported school balance', importedBalance: true, importedAt }
+  }
   const placement = application.placement
   if (!placement?.academicYear || !placement?.term) return { feeDue: null, totalPaid: 0, balance: null, term: null }
   const residency = application.residency || 'Day scholar'
