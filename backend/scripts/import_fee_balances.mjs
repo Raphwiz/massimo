@@ -67,6 +67,7 @@ function matchRow(row, learners) {
   if (learner) return { learner, method: 'repeated admission number and name' }
   learner = choose(samePhone(sameName(baseMatches))) || choose(samePhone(baseMatches))
   if (learner) return { learner, method: 'repeated admission number and parent phone' }
+  if (row.admissionNumber && (exactAdmission.length || baseMatches.length)) return { learner: null, reason: 'admission number belongs to a different learner', candidates: [...new Set([...exactAdmission, ...baseMatches].map(item => item.id))] }
   const nameMatches = learners.filter(item => normText(item.learnerName) === name)
   learner = choose(sameGrade(nameMatches)) || choose(nameMatches)
   if (learner) return { learner, method: 'learner name' }
