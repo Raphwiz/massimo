@@ -88,6 +88,10 @@ export const classListPdfUrl = (classId) => {
   const localApi = typeof window !== 'undefined' && ['localhost', '127.0.0.1'].includes(window.location.hostname) ? 'http://127.0.0.1:8787' : ''
   return `${localApi}/api/class-lists/pdf?classId=${encodeURIComponent(classId || '')}`
 }
+export const boarderRegisterPdfUrl = (grade = '') => {
+  const localApi = typeof window !== 'undefined' && ['localhost', '127.0.0.1'].includes(window.location.hostname) ? 'http://127.0.0.1:8787' : ''
+  return `${localApi}/api/secretary/boarders/pdf?grade=${encodeURIComponent(grade)}`
+}
 export const staffListWorkbookUrl = () => {
   const localApi = typeof window !== 'undefined' && ['localhost', '127.0.0.1'].includes(window.location.hostname) ? 'http://127.0.0.1:8787' : ''
   return `${localApi}/api/staff-list/workbook`

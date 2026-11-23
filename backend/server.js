@@ -259,6 +259,7 @@ function routeRoles(method, path) {
   // Other finance operations remain restricted to the bursar.
   if (path === '/api/finance/learners' || path === '/api/finance/receipts' || /^\/api\/finance\/receipts\/[^/]+\/pdf$/.test(path)) return ['bursar', 'secretary']
   if (path === '/api/secretary/fee-lookup') return ['secretary']
+  if (path === '/api/secretary/boarders/pdf') return ['secretary']
   if (path === '/api/secretary/learner-records' || path === '/api/secretary/learner-records/residency' || /^\/api\/secretary\/learner-records\/[^/]+\/pdf$/.test(path)) return ['secretary']
   if (path.startsWith('/api/finance/')) return ['bursar']
   if (path === '/api/parent/learners' || path === '/api/parent/payment-reports') return ['parent']
@@ -619,6 +620,48 @@ async function createClassListPdf(data, schoolClass) {
     document.switchToPage(range.start + index)
     document.fillColor('#536B84').font('Helvetica').fontSize(7.5).text(`Official class register | ${schoolClass.className} | Page ${index + 1} of ${range.count}`, 42, 787, { width: 511, align: 'center' })
   }
+  document.end()
+  return finished
+}
+async function createBoarderListPdf(data, grade = '') {
+  const learners = data.admissions.filter(item => (item.residency || 'Day scholar') === 'Boarder' && (!grade || item.grade === grade)).slice().sort((a, b) => `${a.placement?.className || a.grade}|${a.learnerName}`.localeCompare(`${b.placement?.className || b.grade}|${b.learnerName}`))
+  let crest = null
+  try { crest = await readFile(crestPath) } catch { /* The report remains usable if the crest asset is unavailable. */ }
+  const chunks = []; const document = new PDFDocument({ size: 'A4', margin: 42, bufferPages: true, autoFirstPage: false })
+  document.on('data', chunk => chunks.push(chunk))
+  const finished = new Promise((resolve, reject) => { document.on('end', () => resolve(Buffer.concat(chunks))); document.on('error', reject) })
+  const generated = new Intl.DateTimeFormat('en-KE', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Africa/Nairobi' }).format(new Date())
+  const reportGrade = grade || 'ALL GRADES'
+  let y = 0
+  const startPage = () => {
+    document.addPage()
+    if (crest) document.image(crest, 281, 18, { fit: [33, 33] })
+    document.fillColor('#173662').font('Helvetica-Bold').fontSize(14).text("ST. DOROTHY'S SCHOOL MASSIMO", 42, 56, { width: 511, align: 'center' })
+    document.font('Helvetica').fontSize(7.5).fillColor('#536B84').text('P.O. Box 36-60607, Mikinduri, Meru, Kenya | +254 722 841 569 | stdorothysschoolmassimo@gmail.com', 42, 74, { width: 511, align: 'center' }).text('We lead by example', 42, 86, { width: 511, align: 'center' })
+    document.moveTo(42, 102).lineTo(553, 102).stroke('#D8A20C')
+    document.fillColor('#1D5EAA').font('Helvetica-Bold').fontSize(12).text(`BOARDING REGISTER - ${reportGrade.toUpperCase()}`, 42, 113, { width: 511, align: 'center' })
+    document.font('Helvetica').fontSize(7.5).fillColor('#536B84').text(`Confirmed boarders only | Learners: ${learners.length} | Generated: ${generated}`, 42, 129, { width: 511, align: 'center' })
+    const headerY = 145
+    document.rect(42, headerY, 511, 18).fill('#1D5EAA')
+    document.fillColor('#FFFFFF').font('Helvetica-Bold').fontSize(7).text('NO.', 48, headerY + 5).text('ADMISSION NO.', 80, headerY + 5).text('LEARNER NAME', 180, headerY + 5).text('CLASS', 390, headerY + 5).text('CATEGORY', 472, headerY + 5)
+    y = headerY + 18
+  }
+  startPage()
+  if (!learners.length) document.fillColor('#536B84').font('Helvetica').fontSize(10).text('No confirmed boarders were found for this grade.', 42, y + 24, { width: 511, align: 'center' })
+  learners.forEach((learner, index) => {
+    const rowHeight = 15
+    if (y + rowHeight > 779) startPage()
+    if (index % 2 === 0) document.rect(42, y, 511, rowHeight).fill('#EDF5FF')
+    document.fillColor('#173662').font('Helvetica').fontSize(7.2).text(String(index + 1), 48, y + 4, { width: 24, align: 'center' })
+    document.text(learner.admissionNumber || 'Pending', 78, y + 4, { width: 92 })
+    document.font('Helvetica-Bold').text(learner.learnerName, 180, y + 4, { width: 202, height: 10, ellipsis: true })
+    document.font('Helvetica').text(learner.placement?.className || learner.grade || '—', 390, y + 4, { width: 76, height: 10, ellipsis: true })
+    document.text('Boarder', 472, y + 4, { width: 70 })
+    document.strokeColor('#DCE5EF').lineWidth(0.5).moveTo(42, y + rowHeight).lineTo(553, y + rowHeight).stroke()
+    y += rowHeight
+  })
+  const range = document.bufferedPageRange()
+  for (let index = 0; index < range.count; index += 1) { document.switchToPage(range.start + index); document.fillColor('#536B84').font('Helvetica').fontSize(7.5).text(`Official boarding register | ${reportGrade} | Page ${index + 1} of ${range.count}`, 42, 787, { width: 511, align: 'center' }) }
   document.end()
   return finished
 }
@@ -1176,6 +1219,13 @@ const server = createServer(async (request, response) => {
       if (request.account.role === 'teacher' && !data.teacherAssignments.some(item => item.classId === schoolClass.id && item.staffName === request.account.name)) return send(response, 403, { error: 'You can print class lists only for your assigned classes.' })
       const pdf = await createClassListPdf(data, schoolClass)
       const fileName = `st_dorothy_${safePdfName(schoolClass.className)}_${safePdfName(schoolClass.academicYear)}_class_list.pdf`
+      response.writeHead(200, { 'Content-Type': 'application/pdf', 'Content-Disposition': `inline; filename="${fileName}"`, 'Cache-Control': 'no-store' })
+      return response.end(pdf)
+    }
+    if (request.method === 'GET' && url.pathname === '/api/secretary/boarders/pdf') {
+      const grade = text(url.searchParams.get('grade'), 40)
+      const pdf = await createBoarderListPdf(data, grade)
+      const fileName = `st_dorothy_boarding_register_${safePdfName(grade || 'all_grades')}.pdf`
       response.writeHead(200, { 'Content-Type': 'application/pdf', 'Content-Disposition': `inline; filename="${fileName}"`, 'Cache-Control': 'no-store' })
       return response.end(pdf)
     }
