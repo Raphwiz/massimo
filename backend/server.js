@@ -60,7 +60,7 @@ const seedData = {
     { id: 'briefing', date: '2026-06-27', title: 'Grade 9 assessment briefing', detail: '10:00 AM · Multipurpose room' }
   ],
   smsMessages: [],
-  smsWallet: { balance: 0, pricePerCreditKes: 0.65, senderId: '' },
+  smsWallet: { balance: 0, pricePerCreditKes: 0.8, senderId: '' },
   smsTopups: [],
   admissions: [],
   schoolClasses: [],
@@ -347,7 +347,8 @@ async function sendBlessedText(phone, message) {
   const apiKey = text(process.env.BLESSEDTEXTS_API_KEY, 300)
   const senderId = text(process.env.SMS_SENDER_ID, 11)
   if (!apiKey || !senderId) throw new Error('The BlessedTexts gateway or approved Sender ID is not configured.')
-  const providerResponse = await fetch('https://sms.blessedtexts.com/api/sms/v1/sendsms', { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' }, body: JSON.stringify({ api_key: apiKey, sender_id: senderId, message, phone }) })
+  const apiBase = text(process.env.BLESSEDTEXTS_API_BASE, 200) || 'https://api.blessedtexts.com/api'
+  const providerResponse = await fetch(`${apiBase.replace(/\/$/, '')}/sms/v1/sendsms`, { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' }, body: JSON.stringify({ api_key: apiKey, sender_id: senderId, message, phone }) })
   const result = await providerResponse.json().catch(() => null)
   if (!providerResponse.ok || !Array.isArray(result) || !result[0] || result[0].status === false) throw new Error('BlessedTexts did not accept this message.')
   return result[0]
@@ -855,7 +856,8 @@ const server = createServer(async (request, response) => {
     data.promotions ??= []
     data.receipts ??= []
     data.smsMessages ??= []
-    data.smsWallet ??= { balance: 0, pricePerCreditKes: 0.65, senderId: '' }
+    data.smsWallet ??= { balance: 0, pricePerCreditKes: 0.8, senderId: '' }
+    data.smsWallet.pricePerCreditKes = 0.8
     data.smsTopups ??= []
     data.mpesaTransactions ??= []
     data.cashbookEntries ??= []
@@ -939,7 +941,7 @@ const server = createServer(async (request, response) => {
       await saveData(data)
       return send(response, 200, { status: 'password updated' })
     }
-    if (request.method === 'GET' && url.pathname === '/api/system-admin/overview') return send(response, 200, { accounts: { total: data.accounts.length, active: data.accounts.filter(account => account.active !== false).length, pendingActivation: data.accounts.filter(account => account.activationExpiresAt && Date.parse(account.activationExpiresAt) > Date.now()).length }, integrations: [{ name: 'M-Pesa Daraja', configured: Boolean(process.env.MPESA_CONSUMER_KEY && process.env.MPESA_CONSUMER_SECRET && process.env.MPESA_PASSKEY) }, { name: 'SMS broker gateway', configured: Boolean(process.env.BLESSEDTEXTS_API_KEY && process.env.SMS_SENDER_ID) }, { name: 'School email', configured: Boolean(process.env.SMTP_HOST && process.env.SMTP_USER) }], security: { secureCookies: isProduction, allowedOrigins: allowedOrigins.size, twoFactorAuthentication: false } })
+    if (request.method === 'GET' && url.pathname === '/api/system-admin/overview') return send(response, 200, { accounts: { total: data.accounts.length, active: data.accounts.filter(account => account.active !== false).length, pendingActivation: data.accounts.filter(account => account.activationExpiresAt && Date.parse(account.activationExpiresAt) > Date.now()).length }, integrations: [{ name: 'M-Pesa Daraja', configured: Boolean(process.env.MPESA_CONSUMER_KEY && process.env.MPESA_CONSUMER_SECRET && process.env.MPESA_PASSKEY) }, { name: 'BlessedTexts SMS', configured: Boolean(process.env.BLESSEDTEXTS_API_KEY && process.env.SMS_SENDER_ID) }, { name: 'School email', configured: Boolean(process.env.SMTP_HOST && process.env.SMTP_USER) }], security: { secureCookies: isProduction, allowedOrigins: allowedOrigins.size, twoFactorAuthentication: false } })
     if (request.method === 'GET' && url.pathname === '/api/public/website-settings') return send(response,200,data.websiteSettings)
     if (request.method === 'GET' && url.pathname === '/api/system-admin/website-settings') return send(response,200,data.websiteSettings)
     if (request.method === 'PUT' && url.pathname === '/api/system-admin/website-settings') { const input=await body(request);const link=value=>/^https?:\/\//i.test(String(value||''))?text(value,300):'';data.websiteSettings={socialLinks:{facebook:link(input.socialLinks?.facebook),instagram:link(input.socialLinks?.instagram),youtube:link(input.socialLinks?.youtube),tiktok:link(input.socialLinks?.tiktok)},gallery:(Array.isArray(input.gallery)?input.gallery:[]).map(link).filter(Boolean).slice(0,6)};await saveData(data);return send(response,200,data.websiteSettings) }
@@ -1055,7 +1057,7 @@ const server = createServer(async (request, response) => {
     }
     if (request.method === 'GET' && url.pathname === '/api/calendar-events') return send(response, 200, data.calendarEvents)
     if (request.method === 'GET' && url.pathname === '/api/sms') return send(response, 200, data.smsMessages)
-    if (request.method === 'GET' && url.pathname === '/api/sms/wallet') return send(response, 200, { balance: Number(data.smsWallet.balance || 0), pricePerCreditKes: Number(data.smsWallet.pricePerCreditKes || 0.65), senderId: text(process.env.SMS_SENDER_ID, 11) || '', gatewayConfigured: Boolean(process.env.BLESSEDTEXTS_API_KEY && process.env.SMS_SENDER_ID), topups: data.smsTopups.slice(0, 8) })
+    if (request.method === 'GET' && url.pathname === '/api/sms/wallet') return send(response, 200, { balance: Number(data.smsWallet.balance || 0), pricePerCreditKes: Number(data.smsWallet.pricePerCreditKes || 0.8), senderId: text(process.env.SMS_SENDER_ID, 11) || '', gatewayConfigured: Boolean(process.env.BLESSEDTEXTS_API_KEY && process.env.SMS_SENDER_ID), topups: data.smsTopups.slice(0, 8) })
     if (request.method === 'GET' && url.pathname === '/api/admissions') {
       if (admissionNumbersAdded || schoolClassesAdded) await saveData(data)
       return send(response, 200, data.admissions)
@@ -1730,8 +1732,8 @@ const server = createServer(async (request, response) => {
       const input = await body(request); const credits = Number(input.credits); const paymentReference = text(input.paymentReference, 80); const paymentChannel = text(input.paymentChannel, 40)
       if (![100, 500, 1000, 2000, 5000].includes(credits) || !paymentReference || !paymentChannel) return send(response, 400, { error: 'Choose an SMS credit pack and enter the verified payment channel and reference.' })
       if (data.smsTopups.some(item => item.paymentChannel.toLowerCase() === paymentChannel.toLowerCase() && item.paymentReference.toLowerCase() === paymentReference.toLowerCase())) return send(response, 409, { error: 'This SMS top-up payment reference has already been recorded.' })
-      const amountKes = Math.round(credits * Number(data.smsWallet.pricePerCreditKes || 0.65) * 100) / 100
-      const topup = { id: `sms-topup-${Date.now()}`, credits, amountKes, paymentChannel, paymentReference, status: 'Awaiting broker settlement', createdAt: new Date().toISOString(), createdBy: request.account.name }
+      const amountKes = Math.round(credits * Number(data.smsWallet.pricePerCreditKes || 0.8) * 100) / 100
+      const topup = { id: `sms-topup-${Date.now()}`, credits, amountKes, paymentChannel, paymentReference, status: 'Awaiting payment confirmation', createdAt: new Date().toISOString(), createdBy: request.account.name }
       data.smsTopups.unshift(topup); data.accountAudit.unshift({ id: `audit-${Date.now()}`, action: 'SMS top-up requested', by: request.account.name, createdAt: topup.createdAt }); await saveData(data)
       return send(response, 201, { topup, balance: data.smsWallet.balance })
     }
@@ -1740,7 +1742,7 @@ const server = createServer(async (request, response) => {
       if (!content || !selection.recipients.length) return send(response, 400, { error: 'Choose a learner, grade, or parent group with at least one valid parent phone number.' })
       const message = { id: `sms-${Date.now()}`, audience: selection.audience, count: selection.recipients.length, text: content, segments, credits, status: 'Pending gateway setup', createdAt: new Date().toISOString(), createdBy: request.account.name }
       const gatewayConfigured = Boolean(process.env.BLESSEDTEXTS_API_KEY && process.env.SMS_SENDER_ID)
-      if (!gatewayConfigured) return send(response, 409, { error: 'The school SMS service is not ready. Ask System Administration to complete the broker gateway setup first.' })
+      if (!gatewayConfigured) return send(response, 409, { error: 'The school SMS service is not ready. Ask System Administration to complete the BlessedTexts and Sender ID setup first.' })
       if (Number(data.smsWallet.balance || 0) < credits) return send(response, 409, { error: `Insufficient SMS credits. This message needs ${credits} credit${credits === 1 ? '' : 's'}.` })
       data.smsWallet.balance -= credits; message.status = 'Sending'; data.smsMessages.unshift(message); await saveData(data)
       const outcomes = await Promise.allSettled(selection.recipients.map(recipient => sendBlessedText(recipient.phone, content)))
