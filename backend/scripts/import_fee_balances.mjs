@@ -3,6 +3,7 @@ import pg from 'pg'
 
 const workbookPath = process.argv[2]
 const applyChanges = process.argv.includes('--apply')
+const addAdmissionNumber = (process.argv.find(argument => argument.startsWith('--add-admission=')) || '').slice('--add-admission='.length)
 if (!workbookPath) throw new Error('Usage: node backend/scripts/import_fee_balances.mjs <workbook.xlsx> [--apply]')
 if (!process.env.DATABASE_URL) throw new Error('DATABASE_URL is required.')
 
@@ -23,6 +24,17 @@ const numeric = cell => {
   if (typeof value === 'number' && Number.isFinite(value)) return value
   const parsed = Number(String(value ?? '').replace(/[^0-9.-]/g, ''))
   return Number.isFinite(parsed) ? parsed : 0
+}
+const nextGrade = grade => {
+  const match = /^Grade (\d)$/.exec(grade)
+  return match && Number(match[1]) < 9 ? `Grade ${Number(match[1]) + 1}` : grade
+}
+const repeatedAdmissionNumber = (number, learners) => {
+  const base = normAdmission(number)
+  let suffix = 1
+  let candidate = `${base}R`
+  while (learners.some(learner => normAdmission(learner.admissionNumber) === candidate)) candidate = `${base}R${++suffix}`
+  return candidate
 }
 
 async function parseRows() {
@@ -45,7 +57,7 @@ async function parseRows() {
       const admissionNumber = cellText(row.getCell(1))
       const feePlanAmount = Math.max(0, Math.round(numeric(row.getCell(9))))
       const balance = [9, 10, 11].reduce((sum, column) => sum + numeric(row.getCell(column)), 0)
-      rows.push({ sheet: sheet.name, row: row.number, grade, admissionNumber, learnerName, fatherPhone: normPhone(cellText(row.getCell(6))), motherPhone: normPhone(cellText(row.getCell(8))), feePlanAmount, balance: Math.max(0, Math.round(balance)) })
+      rows.push({ sheet: sheet.name, row: row.number, grade, admissionNumber, learnerName, dateOfBirth: cellText(row.getCell(4)), fatherName: cellText(row.getCell(5)), fatherPhone: normPhone(cellText(row.getCell(6))), motherName: cellText(row.getCell(7)), motherPhone: normPhone(cellText(row.getCell(8))), feePlanAmount, balance: Math.max(0, Math.round(balance)) })
     }
   }
   return rows
@@ -85,6 +97,27 @@ try {
   const result = await database.query('SELECT payload FROM school_portal_state WHERE id = 1 FOR UPDATE')
   if (!result.rowCount) throw new Error('The school portal state was not found.')
   const data = result.rows[0].payload
+  const created = []
+  if (applyChanges && addAdmissionNumber) {
+    const row = importedRows.find(item => normAdmission(item.admissionNumber) === normAdmission(addAdmissionNumber))
+    if (!row) throw new Error(`No spreadsheet row was found for admission number ${addAdmissionNumber}.`)
+    if (data.admissions.some(learner => normText(learner.learnerName) === normText(row.learnerName) && baseAdmission(learner.admissionNumber) === baseAdmission(row.admissionNumber))) throw new Error(`${row.learnerName} already has a matching live record.`)
+    const academicYear = data.schoolClasses.map(item => String(item.academicYear || '')).filter(Boolean).sort().at(-1) || '2027'
+    const grade = nextGrade(row.grade)
+    const activeClasses = data.schoolClasses.filter(item => item.academicYear === academicYear && item.grade === grade && item.status === 'Active')
+    const occupancy = schoolClass => data.classPlacements.filter(item => item.academicYear === academicYear && item.className === schoolClass.className && item.decision !== 'Waitlisted').length
+    const schoolClass = activeClasses.filter(item => occupancy(item) < Number(item.capacity || 0)).sort((left, right) => occupancy(left) - occupancy(right) || left.className.localeCompare(right.className))[0]
+    const createdAt = new Date().toISOString()
+    const admissionNumber = repeatedAdmissionNumber(row.admissionNumber, data.admissions)
+    const guardians = [{ name: row.fatherName || 'Father contact pending', phone: row.fatherPhone, relationship: 'Father' }, { name: row.motherName || 'Mother contact pending', phone: row.motherPhone, relationship: 'Mother / guardian' }]
+    const learner = { id: `admission-${Date.now()}-balance-import`, admissionNumber, sourceAdmissionNumber: normAdmission(row.admissionNumber), learnerName: row.learnerName, grade, previousGrade: row.grade, residency: row.feePlanAmount >= 20800 ? 'Boarder' : 'Day scholar', guardianName: row.motherName || row.fatherName || 'Guardian contact pending', guardianPhone: row.motherPhone || row.fatherPhone || '', relationship: row.motherName ? 'Mother / guardian' : 'Father', guardians, dateOfBirth: row.dateOfBirth, medicalNotes: '', birthCertificateProvided: false, status: schoolClass ? `Placement confirmed · ${schoolClass.className}` : 'Imported — placement pending', createdAt, importedAt: createdAt }
+    if (schoolClass) {
+      learner.placement = { id: `placement-${Date.now()}-balance-import`, admissionId: learner.id, admissionNumber, learnerName: learner.learnerName, requestedGrade: grade, className: schoolClass.className, academicYear, term: 'Term 1', decision: 'Confirmed', assessmentResult: '', notes: 'Imported from the fee balance register as a repeated admission number.', assignedBy: 'Fee balance import', assignedAt: createdAt, updatedAt: createdAt }
+      data.classPlacements.push(learner.placement)
+    }
+    data.admissions.push(learner)
+    created.push({ learnerName: learner.learnerName, admissionNumber: learner.admissionNumber, className: learner.placement?.className || 'Placement pending' })
+  }
   const matched = [], unmatched = [], ambiguous = []
   const usedLearnerIds = new Set()
   for (const row of importedRows) {
@@ -100,6 +133,7 @@ try {
     unmatched: unmatched.length,
     ambiguous: ambiguous.length,
     boarders: boarders.length,
+    created,
     totalImportedBalance: matched.reduce((sum, item) => sum + item.balance, 0),
     unmatchedExamples: unmatched.slice(0, 25).map(item => `${item.grade}: ${item.learnerName} (${item.admissionNumber || 'no admission number'})`),
     ambiguousExamples: ambiguous.slice(0, 25).map(item => `${item.grade}: ${item.learnerName} (${item.admissionNumber || 'no admission number'})`),
