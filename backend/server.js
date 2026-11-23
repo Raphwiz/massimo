@@ -272,7 +272,7 @@ function routeRoles(method, path) {
   if (path.startsWith('/api/learner-import/')) return ['secretary', 'system-admin']
   if (path === '/api/calendar-events') return ['secretary']
   if (path === '/api/school-classes') return method === 'GET' ? ['headteacher', 'secretary', 'teacher'] : ['headteacher', 'secretary']
-  if (path.startsWith('/api/school-classes/')) return ['headteacher']
+  if (path.startsWith('/api/school-classes/')) return method === 'PUT' ? ['headteacher', 'secretary'] : ['headteacher']
   if (path === '/api/class-placements' || path === '/api/class-placements/suggestions' || path === '/api/class-placements/auto-place') return ['headteacher', 'secretary']
   if (path === '/api/class-lists/workbook' || path === '/api/class-lists/pdf') return ['secretary', 'teacher']
   if (path === '/api/staff-list/workbook') return ['secretary']
