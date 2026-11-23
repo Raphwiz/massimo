@@ -58,9 +58,9 @@ function matchRow(row, learners) {
   const sameName = candidates => candidates.filter(item => normText(item.learnerName) === name)
   const sameGrade = candidates => candidates.filter(item => item.grade === row.grade)
   const samePhone = candidates => candidates.filter(item => [item.fatherPhone, item.motherPhone, item.guardianPhone, ...(item.guardians || []).map(guardian => guardian.phone)].map(normPhone).some(phone => phones.has(phone)))
-  let learner = choose(sameName(exactAdmission)) || choose(exactAdmission)
+  let learner = choose(sameName(exactAdmission))
   if (learner) return { learner, method: 'admission number' }
-  learner = choose(samePhone(sameName(exactAdmission))) || choose(samePhone(exactAdmission))
+  learner = choose(samePhone(sameName(exactAdmission)))
   if (learner) return { learner, method: 'admission number and parent phone' }
   const baseMatches = row.admissionNumber ? learners.filter(item => baseAdmission(item.admissionNumber) === baseAdmission(row.admissionNumber)) : []
   learner = choose(sameName(baseMatches))
