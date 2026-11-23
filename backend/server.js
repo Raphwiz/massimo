@@ -276,7 +276,8 @@ function routeRoles(method, path) {
   if (path === '/api/class-placements' || path === '/api/class-placements/suggestions' || path === '/api/class-placements/auto-place') return ['headteacher', 'secretary']
   if (path === '/api/class-lists/workbook' || path === '/api/class-lists/pdf') return ['secretary', 'teacher']
   if (path === '/api/staff-list/workbook') return ['secretary']
-  if (path === '/api/staff' || path === '/api/staff-attendance' || path === '/api/promotions') return ['headteacher']
+  if (path === '/api/staff') return ['headteacher', 'secretary']
+  if (path === '/api/staff-attendance' || path === '/api/promotions') return ['headteacher']
   if (path === '/api/academics') return ['headteacher', 'teacher']
   if (['/api/subjects', '/api/teacher-assignments', '/api/timetable'].includes(path)) return ['headteacher']
   if (path === '/api/lesson-plans') return ['headteacher', 'teacher']
@@ -1207,23 +1208,23 @@ const server = createServer(async (request, response) => {
       return response.end(Buffer.from(bytes))
     }
     if (request.method === 'GET' && url.pathname === '/api/staff-list/workbook') {
-      const staffByName = new Map(data.staff.filter(item => /teacher/i.test(item.role || '')).map(item => [String(item.fullName || '').toLowerCase(), item]))
+      const staffByName = new Map(data.staff.map(item => [String(item.fullName || '').toLowerCase(), item]))
       data.accounts.filter(item => item.role === 'teacher').forEach(account => { const key = String(account.name || '').toLowerCase(); if (!staffByName.has(key)) staffByName.set(key, { fullName: account.name, role: account.title || 'Teacher', phone: '', email: account.identifier, employmentStatus: account.active === false ? 'Inactive' : 'Active' }) })
-      const teachers = [...staffByName.values()].filter(item => item.fullName).sort((a, b) => String(a.fullName).localeCompare(String(b.fullName)))
+      const staffMembers = [...staffByName.values()].filter(item => item.fullName).sort((a, b) => String(a.fullName).localeCompare(String(b.fullName)))
       const workbook = new ExcelJS.Workbook(); workbook.creator = 'St. Dorothy School Massimo'; workbook.created = new Date()
-      const sheet = workbook.addWorksheet('Teaching Staff', { views: [{ state: 'frozen', ySplit: 7 }] }); sheet.columns = [{ width: 7 }, { width: 30 }, { width: 25 }, { width: 29 }, { width: 18 }, { width: 30 }, { width: 15 }]
+      const sheet = workbook.addWorksheet('School Staff', { views: [{ state: 'frozen', ySplit: 7 }] }); sheet.columns = [{ width: 7 }, { width: 30 }, { width: 16 }, { width: 25 }, { width: 29 }, { width: 18 }, { width: 30 }, { width: 15 }]
       const crestPath = join(root, 'frontend', 'public', 'assets', 'st-dorothy-crest-refined.png')
       try { const crest = workbook.addImage({ buffer: await readFile(crestPath), extension: 'png' }); sheet.addImage(crest, { tl: { col: 0, row: 0 }, ext: { width: 58, height: 58 } }) } catch { /* The report can still be generated if the crest file is unavailable. */ }
-      sheet.mergeCells('B1:G1'); sheet.getCell('B1').value = "ST. DOROTHY'S SCHOOL MASSIMO"; sheet.getCell('B1').font = { name: 'Aptos Display', size: 16, bold: true, color: { argb: 'FF123664' } }; sheet.getCell('B1').alignment = { vertical: 'middle' }
-      sheet.mergeCells('B2:G2'); sheet.getCell('B2').value = 'P.O. Box 36-60607, Mikinduri, Meru, Kenya · +254 722 841 569 · stdorothysschoolmassimo@gmail.com'; sheet.getCell('B2').font = { size: 9, color: { argb: 'FF536B84' } }; sheet.getCell('B2').alignment = { wrapText: true }
-      sheet.mergeCells('A4:G4'); sheet.getCell('A4').value = 'TEACHING STAFF LIST'; sheet.getCell('A4').font = { size: 13, bold: true, color: { argb: 'FFFFFFFF' } }; sheet.getCell('A4').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF123664' } }; sheet.getCell('A4').alignment = { horizontal: 'center' }
-      sheet.mergeCells('A5:D5'); sheet.getCell('A5').value = `Total teaching staff: ${teachers.length}`; sheet.mergeCells('E5:G5'); sheet.getCell('E5').value = `Generated: ${new Intl.DateTimeFormat('en-KE', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Africa/Nairobi' }).format(new Date())}`
+      sheet.mergeCells('B1:H1'); sheet.getCell('B1').value = "ST. DOROTHY'S SCHOOL MASSIMO"; sheet.getCell('B1').font = { name: 'Aptos Display', size: 16, bold: true, color: { argb: 'FF123664' } }; sheet.getCell('B1').alignment = { vertical: 'middle' }
+      sheet.mergeCells('B2:H2'); sheet.getCell('B2').value = 'P.O. Box 36-60607, Mikinduri, Meru, Kenya · +254 722 841 569 · stdorothysschoolmassimo@gmail.com'; sheet.getCell('B2').font = { size: 9, color: { argb: 'FF536B84' } }; sheet.getCell('B2').alignment = { wrapText: true }
+      sheet.mergeCells('A4:H4'); sheet.getCell('A4').value = 'SCHOOL STAFF REGISTER'; sheet.getCell('A4').font = { size: 13, bold: true, color: { argb: 'FFFFFFFF' } }; sheet.getCell('A4').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF123664' } }; sheet.getCell('A4').alignment = { horizontal: 'center' }
+      sheet.mergeCells('A5:D5'); sheet.getCell('A5').value = `Total staff: ${staffMembers.length}`; sheet.mergeCells('E5:H5'); sheet.getCell('E5').value = `Generated: ${new Intl.DateTimeFormat('en-KE', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Africa/Nairobi' }).format(new Date())}`
       for (const cell of ['A5', 'E5']) { sheet.getCell(cell).font = { bold: true, color: { argb: 'FF294A6E' } }; sheet.getCell(cell).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F6FB' } } }
-      const header = sheet.addRow(['No.', 'Teacher name', 'Assigned role', 'Class responsibility', 'Phone', 'Email', 'Status']); header.font = { bold: true, color: { argb: 'FFFFFFFF' } }; header.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1D5EAA' } }; header.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true }
-      teachers.forEach((teacher, index) => { const assignments = [...new Set(data.teacherAssignments.filter(item => item.staffName === teacher.fullName).map(item => item.className).filter(Boolean))]; const row = sheet.addRow([index + 1, teacher.fullName, teacher.role || 'Teacher', assignments.length ? assignments.join(', ') : 'Not assigned', teacher.phone || '—', teacher.email || '—', teacher.employmentStatus || 'Active']); row.alignment = { vertical: 'middle', wrapText: true }; if (index % 2 === 1) row.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF6F9FC' } } })
-      if (!teachers.length) { const row = sheet.addRow(['', 'No teaching staff profiles recorded yet.', '', '', '', '', '']); row.font = { italic: true, color: { argb: 'FF60758C' } } }
+      const header = sheet.addRow(['No.', 'Staff name', 'Category', 'Assigned role', 'Class responsibility', 'Phone', 'Email', 'Status']); header.font = { bold: true, color: { argb: 'FFFFFFFF' } }; header.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1D5EAA' } }; header.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true }
+      staffMembers.forEach((member, index) => { const assignments = [...new Set(data.teacherAssignments.filter(item => item.staffName === member.fullName).map(item => item.className).filter(Boolean))]; const category = member.staffType || (/teacher|headteacher/i.test(member.role || '') ? 'Teaching' : 'Support'); const row = sheet.addRow([index + 1, member.fullName, category, member.role || 'Staff', assignments.length ? assignments.join(', ') : '—', member.phone || '—', member.email || '—', member.employmentStatus || 'Active']); row.alignment = { vertical: 'middle', wrapText: true }; if (index % 2 === 1) row.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF6F9FC' } } })
+      if (!staffMembers.length) { const row = sheet.addRow(['', 'No school staff profiles recorded yet.', '', '', '', '', '', '']); row.font = { italic: true, color: { argb: 'FF60758C' } } }
       sheet.eachRow(row => row.eachCell(cell => { cell.border = { top: { style: 'thin', color: { argb: 'FFD9E4EF' } }, left: { style: 'thin', color: { argb: 'FFD9E4EF' } }, bottom: { style: 'thin', color: { argb: 'FFD9E4EF' } }, right: { style: 'thin', color: { argb: 'FFD9E4EF' } } } }))
-      const bytes = await workbook.xlsx.writeBuffer(); response.writeHead(200, { 'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'Content-Disposition': 'attachment; filename="st_dorothy_teaching_staff_list.xlsx"' }); return response.end(Buffer.from(bytes))
+      const bytes = await workbook.xlsx.writeBuffer(); response.writeHead(200, { 'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'Content-Disposition': 'attachment; filename="st_dorothy_school_staff_register.xlsx"' }); return response.end(Buffer.from(bytes))
     }
     if (request.method === 'GET' && url.pathname === '/api/assessment-marks') {
       const assessmentId = text(url.searchParams.get('assessmentId'), 80)
@@ -1508,7 +1509,8 @@ const server = createServer(async (request, response) => {
       const role = text(input.role, 40)
       const phone = normalisePhone(input.phone)
       if (!fullName || !staffRoles.has(role)) return send(response, 400, { error: 'Staff name and a valid role are required.' })
-      const staffMember = { id: `staff-${Date.now()}`, fullName, role, phone, email: text(input.email, 100), employmentStatus: text(input.employmentStatus, 30) || 'Active', createdAt: new Date().toISOString() }
+      const staffType = ['Teaching', 'Support'].includes(text(input.staffType, 20)) ? text(input.staffType, 20) : (/teacher|headteacher/i.test(role) ? 'Teaching' : 'Support')
+      const staffMember = { id: `staff-${Date.now()}`, fullName, role, staffType, phone, email: text(input.email, 100), employmentStatus: text(input.employmentStatus, 30) || 'Active', createdAt: new Date().toISOString() }
       data.staff.push(staffMember)
       await saveData(data)
       return send(response, 201, staffMember)
