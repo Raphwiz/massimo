@@ -16,6 +16,7 @@ const sourceName = 'Book1 gikundi.xlsx'
 const normText = value => String(value ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '')
 const normAdmission = value => String(value ?? '').trim().toUpperCase().replace(/\s+/g, '')
 const baseAdmission = value => normAdmission(value).replace(/R\d*$/, '')
+const normPhone = value => String(value ?? '').replace(/\D/g, '').replace(/^0(?=7\d{8}$)/, '254')
 const cellText = cell => String(cell?.text ?? cell?.value ?? '').trim()
 const numeric = cell => {
   const value = cell?.value
@@ -43,7 +44,7 @@ async function parseRows() {
       if (!serial || !learnerName || learnerName.toUpperCase() === 'NAME') continue
       const admissionNumber = cellText(row.getCell(1))
       const balance = [9, 10, 11].reduce((sum, column) => sum + numeric(row.getCell(column)), 0)
-      rows.push({ sheet: sheet.name, row: row.number, grade, admissionNumber, learnerName, balance: Math.max(0, Math.round(balance)) })
+      rows.push({ sheet: sheet.name, row: row.number, grade, admissionNumber, learnerName, fatherPhone: normPhone(cellText(row.getCell(6))), motherPhone: normPhone(cellText(row.getCell(8))), balance: Math.max(0, Math.round(balance)) })
     }
   }
   return rows
@@ -51,18 +52,26 @@ async function parseRows() {
 
 function matchRow(row, learners) {
   const name = normText(row.learnerName)
+  const phones = new Set([row.fatherPhone, row.motherPhone].filter(Boolean))
   const exactAdmission = row.admissionNumber ? learners.filter(item => normAdmission(item.admissionNumber) === normAdmission(row.admissionNumber)) : []
   const choose = candidates => candidates.length === 1 ? candidates[0] : null
   const sameName = candidates => candidates.filter(item => normText(item.learnerName) === name)
   const sameGrade = candidates => candidates.filter(item => item.grade === row.grade)
+  const samePhone = candidates => candidates.filter(item => [item.fatherPhone, item.motherPhone, item.guardianPhone, ...(item.guardians || []).map(guardian => guardian.phone)].map(normPhone).some(phone => phones.has(phone)))
   let learner = choose(sameName(exactAdmission)) || choose(exactAdmission)
   if (learner) return { learner, method: 'admission number' }
+  learner = choose(samePhone(sameName(exactAdmission))) || choose(samePhone(exactAdmission))
+  if (learner) return { learner, method: 'admission number and parent phone' }
   const baseMatches = row.admissionNumber ? learners.filter(item => baseAdmission(item.admissionNumber) === baseAdmission(row.admissionNumber)) : []
   learner = choose(sameName(baseMatches))
   if (learner) return { learner, method: 'repeated admission number and name' }
+  learner = choose(samePhone(sameName(baseMatches))) || choose(samePhone(baseMatches))
+  if (learner) return { learner, method: 'repeated admission number and parent phone' }
   const nameMatches = learners.filter(item => normText(item.learnerName) === name)
   learner = choose(sameGrade(nameMatches)) || choose(nameMatches)
   if (learner) return { learner, method: 'learner name' }
+  learner = choose(samePhone(sameGrade(nameMatches))) || choose(samePhone(nameMatches))
+  if (learner) return { learner, method: 'learner name and parent phone' }
   return { learner: null, reason: nameMatches.length || exactAdmission.length || baseMatches.length ? 'ambiguous' : 'not found', candidates: [...new Set([...nameMatches, ...exactAdmission, ...baseMatches].map(item => item.id))] }
 }
 
@@ -91,7 +100,8 @@ try {
     boarders: boarders.length,
     totalImportedBalance: matched.reduce((sum, item) => sum + item.balance, 0),
     unmatchedExamples: unmatched.slice(0, 25).map(item => `${item.grade}: ${item.learnerName} (${item.admissionNumber || 'no admission number'})`),
-    ambiguousExamples: ambiguous.slice(0, 25).map(item => `${item.grade}: ${item.learnerName} (${item.admissionNumber || 'no admission number'})`)
+    ambiguousExamples: ambiguous.slice(0, 25).map(item => `${item.grade}: ${item.learnerName} (${item.admissionNumber || 'no admission number'})`),
+    ambiguousCandidates: ambiguous.slice(0, 25).map(item => ({ row: `${item.grade}: ${item.learnerName} (${item.admissionNumber || 'no admission number'})`, candidates: item.candidates.map(id => { const learner = data.admissions.find(record => record.id === id); return learner ? `${learner.learnerName} (${learner.admissionNumber || 'no admission number'}, ${learner.grade})` : id }) }))
   }
   if (!applyChanges) {
     console.log(JSON.stringify(report, null, 2))
