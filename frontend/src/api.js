@@ -42,6 +42,8 @@ export const runGoLiveReset = (details) => request('/api/system-admin/go-live', 
 export const createCalendarEvent = (event) => request('/api/calendar-events', { method: 'POST', body: JSON.stringify(event) })
 export const getSmsMessages = () => request('/api/sms')
 export const createSmsMessage = (message) => request('/api/sms', { method: 'POST', body: JSON.stringify(message) })
+export const getSmsWallet = () => request('/api/sms/wallet')
+export const createSmsTopup = (topup) => request('/api/sms/topups', { method: 'POST', body: JSON.stringify(topup) })
 export const getAdmissions = () => request('/api/admissions')
 export const previewLearnerImport = (fileBase64) => request('/api/learner-import/preview', { method: 'POST', body: JSON.stringify({ fileBase64 }) })
 export const commitLearnerImport = (rows) => request('/api/learner-import/commit', { method: 'POST', body: JSON.stringify({ rows }) })
