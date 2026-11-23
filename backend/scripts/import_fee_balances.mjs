@@ -44,19 +44,26 @@ async function parseRows() {
   for (const sheet of workbook.worksheets) {
     let grade = ''
     let isDataSection = false
+    let statedTotalColumn = 0
     for (const row of sheet.getRows(1, sheet.rowCount) || []) {
       const values = row.values.slice(1)
       const detected = values.map(value => gradeLabels.get(String(value ?? '').trim().toUpperCase())).find(Boolean)
-      if (detected) { grade = detected; isDataSection = false; continue }
+      if (detected) { grade = detected; isDataSection = false; statedTotalColumn = 0; continue }
       const isHeader = cellText(row.getCell(2)).toUpperCase().replace(/\./g, '') === 'NO' && cellText(row.getCell(3)).toUpperCase() === 'NAME'
-      if (isHeader) { isDataSection = Boolean(grade); continue }
+      if (isHeader) {
+        isDataSection = Boolean(grade)
+        const labels = [9, 10, 11].map(column => cellText(row.getCell(column)).toUpperCase())
+        const totalIndex = labels.findIndex(label => label === 'TOTAL')
+        statedTotalColumn = totalIndex < 0 ? 0 : totalIndex + 9
+        continue
+      }
       if (!isDataSection || !grade) continue
       const serial = numeric(row.getCell(2))
       const learnerName = cellText(row.getCell(3))
       if (!serial || !learnerName || learnerName.toUpperCase() === 'NAME') continue
       const admissionNumber = cellText(row.getCell(1))
       const feePlanAmount = Math.max(0, Math.round(numeric(row.getCell(9))))
-      const balance = [9, 10, 11].reduce((sum, column) => sum + numeric(row.getCell(column)), 0)
+      const balance = statedTotalColumn ? numeric(row.getCell(statedTotalColumn)) : [9, 10, 11].reduce((sum, column) => sum + numeric(row.getCell(column)), 0)
       rows.push({ sheet: sheet.name, row: row.number, grade, admissionNumber, learnerName, dateOfBirth: cellText(row.getCell(4)), fatherName: cellText(row.getCell(5)), fatherPhone: normPhone(cellText(row.getCell(6))), motherName: cellText(row.getCell(7)), motherPhone: normPhone(cellText(row.getCell(8))), feePlanAmount, balance: Math.max(0, Math.round(balance)) })
     }
   }
