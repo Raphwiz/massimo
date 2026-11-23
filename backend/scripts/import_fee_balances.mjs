@@ -43,8 +43,9 @@ async function parseRows() {
       const learnerName = cellText(row.getCell(3))
       if (!serial || !learnerName || learnerName.toUpperCase() === 'NAME') continue
       const admissionNumber = cellText(row.getCell(1))
+      const feePlanAmount = Math.max(0, Math.round(numeric(row.getCell(9))))
       const balance = [9, 10, 11].reduce((sum, column) => sum + numeric(row.getCell(column)), 0)
-      rows.push({ sheet: sheet.name, row: row.number, grade, admissionNumber, learnerName, fatherPhone: normPhone(cellText(row.getCell(6))), motherPhone: normPhone(cellText(row.getCell(8))), balance: Math.max(0, Math.round(balance)) })
+      rows.push({ sheet: sheet.name, row: row.number, grade, admissionNumber, learnerName, fatherPhone: normPhone(cellText(row.getCell(6))), motherPhone: normPhone(cellText(row.getCell(8))), feePlanAmount, balance: Math.max(0, Math.round(balance)) })
     }
   }
   return rows
@@ -92,7 +93,7 @@ try {
     else if (usedLearnerIds.has(result.learner.id)) ambiguous.push({ ...row, candidates: [result.learner.id], reason: 'multiple spreadsheet rows matched the same learner' })
     else { usedLearnerIds.add(result.learner.id); matched.push({ ...row, learner: result.learner, method: result.method }) }
   }
-  const boarders = matched.filter(item => item.balance >= 20000)
+  const boarders = matched.filter(item => item.feePlanAmount >= 20800)
   const report = {
     spreadsheetRows: importedRows.length,
     matched: matched.length,
@@ -116,7 +117,7 @@ try {
     const boarderIds = new Set(boarders.map(item => item.learner.id))
     data.admissions = data.admissions.map(learner => boarderIds.has(learner.id) ? { ...learner, residency: 'Boarder', residencyUpdatedAt: importedAt, residencyUpdatedBy: 'Fee balance import', updatedAt: importedAt } : learner)
     data.financeAudit ??= []
-    data.financeAudit.unshift({ id: `finance-audit-${Date.now()}`, action: 'Imported', recordType: 'Fee balances', recordId: sourceName, detail: `${matched.length} learner balances imported. ${boarders.length} learners with balances of KES 20,000 or more marked Boarder.`, by: 'System data import', role: 'system-admin', createdAt: importedAt })
+    data.financeAudit.unshift({ id: `finance-audit-${Date.now()}`, action: 'Imported', recordType: 'Fee balances', recordId: sourceName, detail: `${matched.length} learner balances imported. ${boarders.length} learners with a KES 20,800 or higher fee plan marked Boarder.`, by: 'System data import', role: 'system-admin', createdAt: importedAt })
     await database.query('UPDATE school_portal_state SET payload = $1::jsonb, updated_at = NOW() WHERE id = 1', [JSON.stringify(data)])
     await database.query('COMMIT')
     console.log(JSON.stringify({ ...report, applied: true }, null, 2))
