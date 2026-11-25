@@ -805,7 +805,7 @@ async function createLearnerRecordPdf(data, learner) {
   document.end()
   return finished
 }
-async function createFeeStatementPdf(data, learner) {
+async function createFeeStatementPdf(data, learner, servedBy = 'School office') {
   const finance = currentFeeSummary(data, learner); const receipts = data.receipts.filter(item => item.admissionId === learner.id).slice().sort((a, b) => String(a.issuedAt).localeCompare(String(b.issuedAt)))
   const statementNumber = `SD/STM/${new Date().getFullYear()}/${learner.admissionNumber || learner.id}`; const generatedAt = new Date(); const payBy = new Date(generatedAt); payBy.setDate(payBy.getDate() + 14)
   const chunks = []; const document = new PDFDocument({ size: 'A4', margin: 42 }); document.on('data', chunk => chunks.push(chunk))
@@ -819,7 +819,7 @@ async function createFeeStatementPdf(data, learner) {
   let y = 403; if (!receipts.length) document.text('No confirmed payments recorded for this learner.', 42, y)
   receipts.slice(0, 12).forEach(receipt => { document.text(String(receipt.issuedAt || '').slice(0, 10), 42, y).text(`${receipt.receiptNumber || ''}${receipt.paymentReference ? ` / ${receipt.paymentReference}` : ''}`, 125, y, { width: 180 }).text(receipt.paymentMethod || '', 315, y).text(money(receipt.amount), 440, y); y += 16 })
   const guidanceY = Math.max(y + 24, 455); document.fillColor('#173662').font('Helvetica-Bold').fontSize(10).text(`Payment guidance - Pay by ${payBy.toLocaleDateString('en-KE')}`, 42, guidanceY); document.font('Helvetica').fontSize(8.5).text('Use the learner name and grade as your account reference. Retain the payment confirmation for reconciliation.', 42, guidanceY + 16, { width: 500 }); document.font('Helvetica-Bold').fontSize(9).text('Official payment channels', 42, guidanceY + 42); document.font('Helvetica').fontSize(8.5).text('Equity Paybill 247247 - Account 803434#Learner Name/Grade', 42, guidanceY + 57).text('DTB Paybill 516600 - Account 808616#Learner Name/Grade', 42, guidanceY + 71).text('Trans Nation Paybill 507900 - Account 9000482#Learner Name/Grade', 42, guidanceY + 85).text('Bank: Equity Bank Meru A/C 0140296813439 | DTB Bank Meru A/C 0259364001', 42, guidanceY + 99, { width: 500 }).text('For help, contact the Bursar on +254 722 841 569.', 42, guidanceY + 113)
-  document.fillColor('#536b84').fontSize(7.5).text('This is a computer-generated private fee statement. It is intended only for the learner’s parent or guardian.', 42, 760, { align: 'center', width: 510 }); document.end(); return finished
+  document.fillColor('#536b84').fontSize(7.5).text(`Prepared for you by ${servedBy}. Thank you.`, 42, 746, { align: 'center', width: 510 }); document.text('This is a computer-generated private fee statement. It is intended only for the learner’s parent or guardian.', 42, 760, { align: 'center', width: 510 }); document.end(); return finished
 }
 
 async function createReceiptPdf(receipt) {
@@ -838,8 +838,10 @@ async function createReceiptPdf(receipt) {
   row('Payment reference', receipt.paymentReference, 289)
   row('Amount received', money(receipt.amount), 335, true)
   row('Payment date', receipt.paymentDate || String(receipt.issuedAt || '').slice(0, 10), 381)
-  document.fillColor('#536B84').font('Helvetica').fontSize(7.5).text(`Confirmed ${new Intl.DateTimeFormat('en-KE', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Africa/Nairobi' }).format(new Date(receipt.issuedAt || Date.now()))}.`, 36, 436, { width: 348, align: 'center' })
-  document.text('Computer-generated receipt · Keep this for school-fee verification.', 36, 450, { width: 348, align: 'center' }); document.end(); return finished
+  row('Remaining balance after payment', receipt.remainingBalance === null || receipt.remainingBalance === undefined ? 'Balance pending' : money(receipt.remainingBalance), 427, true)
+  row('Served by', `${receipt.servedBy || 'School office'} · Thank you`, 473)
+  document.fillColor('#536B84').font('Helvetica').fontSize(7.5).text(`Confirmed ${new Intl.DateTimeFormat('en-KE', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Africa/Nairobi' }).format(new Date(receipt.issuedAt || Date.now()))}.`, 36, 528, { width: 348, align: 'center' })
+  document.text('Computer-generated receipt · Keep this for school-fee verification.', 36, 542, { width: 348, align: 'center' }); document.end(); return finished
 }
 
 function learnerAttendanceSummary(data, admissionId) {
@@ -1389,13 +1391,13 @@ const server = createServer(async (request, response) => {
       learners.forEach((learner, index) => { const finance = currentFeeSummary(data, learner); sheet.addRow([index + 1, learner.learnerName, learner.admissionNumber, learner.placement?.className || learner.grade, learner.guardianName, learner.guardianPhone, finance.balance, '']) }); sheet.getColumn(7).numFmt = '#,##0'; sheet.views = [{ state: 'frozen', ySplit: 5 }]
       const deliveryRegister = await workbook.xlsx.writeBuffer(); const zipName = `st_dorothy_fee_statements_${safePdfName(className || 'all_classes')}_${new Date().toISOString().slice(0, 10)}.zip`
       response.writeHead(200, { 'Content-Type': 'application/zip', 'Content-Disposition': `attachment; filename="${zipName}"` }); const archive = new ZipArchive({ zlib: { level: 9 } }); archive.on('error', error => response.destroy(error)); archive.pipe(response)
-      for (const learner of learners) archive.append(await createFeeStatementPdf(data, learner), { name: `fee-statements/${safePdfName(learner.admissionNumber || learner.id)}_${safePdfName(learner.learnerName)}.pdf` })
+      for (const learner of learners) archive.append(await createFeeStatementPdf(data, learner, request.account.name), { name: `fee-statements/${safePdfName(learner.admissionNumber || learner.id)}_${safePdfName(learner.learnerName)}.pdf` })
       archive.append(Buffer.from(deliveryRegister), { name: 'bursar-delivery-register.xlsx' }); await archive.finalize(); return
     }
     if (request.method === 'GET' && /^\/api\/finance\/statements\/[^/]+\/pdf$/.test(url.pathname)) {
       const admissionId = decodeURIComponent(url.pathname.split('/')[4]); const learner = data.admissions.find(item => item.id === admissionId)
       if (!learner) return send(response, 404, { error: 'Learner account not found.' })
-      const pdf = await createFeeStatementPdf(data, learner); response.writeHead(200, { 'Content-Type': 'application/pdf', 'Content-Disposition': `inline; filename="st_dorothy_fee_statement_${safePdfName(learner.admissionNumber || learner.id)}.pdf"` }); return response.end(pdf)
+      const pdf = await createFeeStatementPdf(data, learner, request.account.name); response.writeHead(200, { 'Content-Type': 'application/pdf', 'Content-Disposition': `inline; filename="st_dorothy_fee_statement_${safePdfName(learner.admissionNumber || learner.id)}.pdf"` }); return response.end(pdf)
     }
     if (request.method === 'GET' && /^\/api\/finance\/statements\/[^/]+$/.test(url.pathname)) {
       const admissionId = decodeURIComponent(url.pathname.split('/')[4])
@@ -1408,7 +1410,7 @@ const server = createServer(async (request, response) => {
     if (request.method === 'GET' && /^\/api\/finance\/receipts\/[^/]+\/pdf$/.test(url.pathname)) {
       const receiptId = decodeURIComponent(url.pathname.split('/')[4]); const receipt = data.receipts.find(item => item.id === receiptId)
       if (!receipt) return send(response, 404, { error: 'Payment receipt not found.' })
-      const pdf = await createReceiptPdf(receipt); response.writeHead(200, { 'Content-Type': 'application/pdf', 'Content-Disposition': `inline; filename="st_dorothy_receipt_${safePdfName(receipt.receiptNumber || receipt.id)}.pdf"` }); return response.end(pdf)
+      const pdf = await createReceiptPdf(receipt); response.writeHead(200, { 'Content-Type': 'application/pdf', 'Content-Disposition': `${url.searchParams.has('download') ? 'attachment' : 'inline'}; filename="st_dorothy_receipt_${safePdfName(receipt.receiptNumber || receipt.id)}.pdf"` }); return response.end(pdf)
     }
     if (request.method === 'GET' && url.pathname === '/api/finance/receipts') return send(response, 200, data.receipts)
     if (request.method === 'GET' && url.pathname === '/api/finance/mpesa-transactions') return send(response, 200, data.mpesaTransactions)
@@ -1886,9 +1888,11 @@ const server = createServer(async (request, response) => {
         paymentReference,
         paymentDate: /^\d{4}-\d{2}-\d{2}$/.test(paymentDate) ? paymentDate : issuedAt.slice(0, 10),
         confirmationSource: 'Manual school notification',
+        servedBy: request.account.name || 'School office',
         issuedAt
       }
       data.receipts.unshift(receipt)
+      receipt.remainingBalance = currentFeeSummary(data, learner).balance
       addFinanceAudit(data,request,'Confirmed','Manual payment',receipt.id,`${receipt.receiptNumber} · ${receipt.learnerName} · ${money(amount)} · ${paymentMethod} · ${paymentReference}`)
       await saveData(data)
       return send(response, 201, receipt)
