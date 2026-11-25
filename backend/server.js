@@ -825,23 +825,31 @@ async function createFeeStatementPdf(data, learner, servedBy = 'School office') 
 async function createReceiptPdf(receipt) {
   const chunks = []; const document = new PDFDocument({ size: 'A5', margin: 36 }); document.on('data', chunk => chunks.push(chunk))
   const finished = new Promise((resolve, reject) => { document.on('end', () => resolve(Buffer.concat(chunks))); document.on('error', reject) })
-  try { document.image(await readFile(crestPath), 44, 30, { fit: [45, 45] }) } catch { /* The receipt remains valid if the crest is unavailable. */ }
-  document.fillColor('#173662').font('Helvetica-Bold').fontSize(16).text("ST. DOROTHY'S SCHOOL MASSIMO", 102, 37)
-  document.font('Helvetica').fontSize(7.5).fillColor('#536B84').text('P.O. Box 36-60607, Mikinduri, Meru, Kenya · +254 722 841 569', 102, 59).text('stdorothysschoolmassimo@gmail.com · We lead by example', 102, 71)
-  document.moveTo(36, 94).lineTo(384, 94).stroke('#D8A20C')
-  document.fillColor('#1D5EAA').font('Helvetica-Bold').fontSize(13).text('OFFICIAL PAYMENT RECEIPT', 36, 110, { width: 348, align: 'center' })
-  document.font('Helvetica').fontSize(8).fillColor('#536B84').text(`Receipt no. ${receipt.receiptNumber}`, 36, 130, { width: 348, align: 'center' })
-  const row = (label, value, y, accent = false) => { document.roundedRect(36, y, 348, 37, 6).fillAndStroke(accent ? '#EEF6FF' : '#F8FAFC', '#DCE5EF'); document.fillColor('#6A8098').font('Helvetica-Bold').fontSize(7.5).text(label.toUpperCase(), 48, y + 8); document.fillColor('#173662').font('Helvetica-Bold').fontSize(10).text(value || '—', 48, y + 19, { width: 320 }) }
-  row('Learner', `${receipt.learnerName} · ${receipt.admissionNumber}`, 151)
-  row('Class', receipt.className || 'Not recorded', 197)
-  row('Payment channel', receipt.paymentMethod, 243)
-  row('Payment reference', receipt.paymentReference, 289)
-  row('Amount received', money(receipt.amount), 335, true)
-  row('Payment date', receipt.paymentDate || String(receipt.issuedAt || '').slice(0, 10), 381)
-  row('Remaining balance after payment', receipt.remainingBalance === null || receipt.remainingBalance === undefined ? 'Balance pending' : money(receipt.remainingBalance), 427, true)
-  row('Served by', `${receipt.servedBy || 'School office'} · Thank you`, 473)
-  document.fillColor('#536B84').font('Helvetica').fontSize(7.5).text(`Confirmed ${new Intl.DateTimeFormat('en-KE', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Africa/Nairobi' }).format(new Date(receipt.issuedAt || Date.now()))}.`, 36, 528, { width: 348, align: 'center' })
-  document.text('Computer-generated receipt · Keep this for school-fee verification.', 36, 542, { width: 348, align: 'center' }); document.end(); return finished
+  try { document.image(await readFile(crestPath), 36, 28, { fit: [44, 44] }) } catch { /* The receipt remains valid if the crest is unavailable. */ }
+  document.fillColor('#173662').font('Helvetica-Bold').fontSize(13).text("ST. DOROTHY'S SCHOOL MASSIMO", 89, 34)
+  document.font('Helvetica').fontSize(6.8).fillColor('#536B84').text('P.O. Box 36-60607, Mikinduri, Meru, Kenya | +254 722 841 569', 89, 52).text('stdorothysschoolmassimo@gmail.com | We lead by example', 89, 63)
+  document.moveTo(36, 84).lineTo(384, 84).stroke('#1D5EAA')
+  document.fillColor('#173662').font('Helvetica-Bold').fontSize(14).text('PAYMENT RECEIPT', 36, 99)
+  document.font('Helvetica').fontSize(7.2).fillColor('#536B84').text(`Receipt No: ${receipt.receiptNumber || 'Pending'} | Generated: ${new Intl.DateTimeFormat('en-KE', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Africa/Nairobi' }).format(new Date(receipt.issuedAt || Date.now()))}`, 36, 119, { width: 348 })
+  const heading = (label, y) => document.fillColor('#173662').font('Helvetica-Bold').fontSize(9).text(label, 36, y)
+  const detail = (label, value, y, x = 36) => { document.fillColor('#536B84').font('Helvetica-Bold').fontSize(7.2).text(label, x, y); document.fillColor('#173662').font('Helvetica').fontSize(8.2).text(value || 'Not recorded', x, y + 10, { width: 154 }) }
+  heading('Learner and payment', 151)
+  detail('LEARNER', receipt.learnerName, 168)
+  detail('ADMISSION NUMBER', receipt.admissionNumber, 168, 210)
+  detail('GRADE / CLASS', receipt.className, 197)
+  detail('PAYMENT DATE', receipt.paymentDate || String(receipt.issuedAt || '').slice(0, 10), 197, 210)
+  heading('Account summary', 232)
+  document.rect(36, 249, 348, 22).fill('#EEF6FF')
+  document.fillColor('#173662').font('Helvetica-Bold').fontSize(8.5).text('Amount received', 46, 256).text(money(receipt.amount), 254, 256, { width: 120, align: 'right' })
+  document.rect(36, 274, 348, 22).fill('#E6F4E9')
+  document.fillColor('#1F7044').font('Helvetica-Bold').fontSize(8.5).text('Remaining balance after payment', 46, 281).text(receipt.remainingBalance === null || receipt.remainingBalance === undefined ? 'Not available' : money(receipt.remainingBalance), 254, 281, { width: 120, align: 'right' })
+  heading('Payment record', 317)
+  document.fillColor('#536B84').font('Helvetica-Bold').fontSize(7).text('CHANNEL', 36, 335).text('REFERENCE', 151, 335).text('SERVED BY', 272, 335)
+  document.moveTo(36, 346).lineTo(384, 346).stroke('#B8C9DA')
+  document.fillColor('#173662').font('Helvetica').fontSize(8).text(receipt.paymentMethod || 'Not recorded', 36, 354, { width: 105 }).text(receipt.paymentReference || 'Not recorded', 151, 354, { width: 111 }).text(receipt.servedBy || 'School office', 272, 354, { width: 112 })
+  document.moveTo(36, 377).lineTo(384, 377).stroke('#D8A20C')
+  document.fillColor('#173662').font('Helvetica-Bold').fontSize(8.8).text(`Served by ${receipt.servedBy || 'School office'}. Thank you.`, 36, 391, { width: 348, align: 'center' })
+  document.fillColor('#536B84').font('Helvetica').fontSize(6.8).text('This is a computer-generated school-fee receipt. Keep it for account verification.', 36, 407, { width: 348, align: 'center' }); document.end(); return finished
 }
 
 function receiptForPrint(data, receipt, servedBy) {
