@@ -844,6 +844,19 @@ async function createReceiptPdf(receipt) {
   document.text('Computer-generated receipt · Keep this for school-fee verification.', 36, 542, { width: 348, align: 'center' }); document.end(); return finished
 }
 
+function receiptForPrint(data, receipt, servedBy) {
+  const learner = data.admissions.find(item => item.id === receipt.admissionId)
+  const hasSavedBalance = Number.isFinite(Number(receipt.remainingBalance))
+  let remainingBalance = hasSavedBalance ? Number(receipt.remainingBalance) : null
+  if (!hasSavedBalance && learner) {
+    const paymentsAfterThisReceipt = data.receipts
+      .filter(item => item.admissionId === learner.id && String(item.issuedAt || '') > String(receipt.issuedAt || ''))
+      .reduce((total, item) => total + Number(item.amount || 0), 0)
+    remainingBalance = currentFeeSummary(data, learner).balance + paymentsAfterThisReceipt
+  }
+  return { ...receipt, remainingBalance, servedBy: servedBy || receipt.servedBy || 'School office' }
+}
+
 function learnerAttendanceSummary(data, admissionId) {
   const records = data.attendanceRecords.filter(item => item.admissionId === admissionId)
   const present = records.filter(item => item.status === 'Present' || item.status === 'Late').length
@@ -1410,7 +1423,8 @@ const server = createServer(async (request, response) => {
     if (request.method === 'GET' && /^\/api\/finance\/receipts\/[^/]+\/pdf$/.test(url.pathname)) {
       const receiptId = decodeURIComponent(url.pathname.split('/')[4]); const receipt = data.receipts.find(item => item.id === receiptId)
       if (!receipt) return send(response, 404, { error: 'Payment receipt not found.' })
-      const pdf = await createReceiptPdf(receipt); response.writeHead(200, { 'Content-Type': 'application/pdf', 'Content-Disposition': `${url.searchParams.has('download') ? 'attachment' : 'inline'}; filename="st_dorothy_receipt_${safePdfName(receipt.receiptNumber || receipt.id)}.pdf"` }); return response.end(pdf)
+      const printableReceipt = receiptForPrint(data, receipt, request.account.name)
+      const pdf = await createReceiptPdf(printableReceipt); response.writeHead(200, { 'Content-Type': 'application/pdf', 'Content-Disposition': `${url.searchParams.has('download') ? 'attachment' : 'inline'}; filename="st_dorothy_receipt_${safePdfName(receipt.receiptNumber || receipt.id)}.pdf"` }); return response.end(pdf)
     }
     if (request.method === 'GET' && url.pathname === '/api/finance/receipts') return send(response, 200, data.receipts)
     if (request.method === 'GET' && url.pathname === '/api/finance/mpesa-transactions') return send(response, 200, data.mpesaTransactions)
