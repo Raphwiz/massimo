@@ -36,6 +36,7 @@ export const setPortalAccountStatus = (id, active) => request(`/api/accounts/${e
 export const updatePortalAccountRole = (id, role, action = 'grant') => request(`/api/accounts/${encodeURIComponent(id)}/roles`, { method: 'PUT', body: JSON.stringify({ role, action }) })
 export const deletePortalAccount = (id) => request(`/api/accounts/${encodeURIComponent(id)}`, { method: 'DELETE' })
 export const getSystemAdminOverview = () => request('/api/system-admin/overview')
+export const getSystemLogs = () => request('/api/system-admin/logs')
 export const getHeadteacherDashboard = () => request('/api/headteacher/dashboard')
 export const getHeadteacherAttendance = (date) => request(`/api/headteacher/attendance?date=${encodeURIComponent(date || '')}`)
 export const getGoLivePreview = () => request('/api/system-admin/go-live')

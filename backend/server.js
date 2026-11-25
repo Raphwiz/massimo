@@ -250,6 +250,7 @@ function routeRoles(method, path) {
   if (method === 'POST' && path === '/api/auth/change-password') return ['system-admin', 'headteacher', 'secretary', 'teacher', 'bursar', 'parent']
   if (method === 'GET' && path === '/api/auth/session') return ['system-admin', 'headteacher', 'secretary', 'teacher', 'bursar', 'parent']
   if (path === '/api/system-admin/overview') return ['system-admin']
+  if (path === '/api/system-admin/logs') return ['system-admin']
   if (path === '/api/headteacher/dashboard') return ['headteacher']
   if (path === '/api/headteacher/attendance') return ['headteacher']
   if (path === '/api/system-admin/go-live') return ['system-admin']
@@ -265,6 +266,7 @@ function routeRoles(method, path) {
   if (path === '/api/secretary/fee-lookup') return ['secretary']
   if (path === '/api/secretary/boarders/pdf') return ['secretary']
   if (path === '/api/secretary/learner-records' || path === '/api/secretary/learner-records/residency' || /^\/api\/secretary\/learner-records\/[^/]+\/pdf$/.test(path)) return ['secretary']
+  if (path === '/api/finance/audit') return ['system-admin']
   if (path.startsWith('/api/finance/')) return ['bursar']
   if (path === '/api/parent/learners' || path === '/api/parent/payment-reports') return ['parent']
   if (path === '/api/parent/messages') return method === 'POST' ? ['parent'] : ['parent', 'teacher', 'secretary']
@@ -575,6 +577,7 @@ function currentFeeSummary(data, application) {
 }
 
 function addFinanceAudit(data, request, action, recordType, recordId, detail = '') { data.financeAudit ??= []; data.financeAudit.unshift({ id:`finance-audit-${Date.now()}-${Math.random().toString(36).slice(2,7)}`, action, recordType, recordId, detail, by:request.account.name, role:request.account.role, createdAt:new Date().toISOString() }) }
+function addAccountAudit(data, action, account, detail = '') { data.accountAudit ??= []; data.accountAudit.unshift({ id:`audit-${Date.now()}-${Math.random().toString(36).slice(2,7)}`, action, accountId:account?.id || '', accountName:account?.name || '', by:account?.name || 'System', detail, createdAt:new Date().toISOString() }) }
 
 const money = value => `KES ${Number(value || 0).toLocaleString('en-KE')}`
 const safePdfName = value => String(value || 'learner').replace(/[^a-z0-9_-]+/gi, '_').replace(/^_+|_+$/g, '')
@@ -949,6 +952,8 @@ const server = createServer(async (request, response) => {
         return send(response, 401, { error: 'The sign-in details are not recognised. Please try again or contact the school office.' })
       }
       clearAttempts(request, 'login')
+      addAccountAudit(data, 'Successful sign-in', account, `${portal || 'portal'} portal`)
+      await saveData(data)
       createSession(response, account)
       return send(response, 200, { id: account.id, role: account.role, roles: accountRoles(account), name: account.name, title: account.title, parentPhone: account.parentPhone || '', mustChangePassword: Boolean(account.mustChangePassword) })
     }
@@ -973,6 +978,7 @@ const server = createServer(async (request, response) => {
       delete updatedAccount.activationExpiresAt
       delete updatedAccount.activationIssuedAt
       data.accounts = data.accounts.map(item => item.id === account.id ? updatedAccount : item)
+      addAccountAudit(data, 'Account activated', updatedAccount, 'Activation code accepted and password set')
       await saveData(data)
       createSession(response, updatedAccount)
       return send(response, 200, { role: updatedAccount.role, roles: accountRoles(updatedAccount), name: updatedAccount.name, title: updatedAccount.title, parentPhone: updatedAccount.parentPhone || '', mustChangePassword: false })
@@ -993,10 +999,12 @@ const server = createServer(async (request, response) => {
       const updatedAccount = { ...request.account, ...createPasswordHash(newPassword), mustChangePassword: false, passwordChangedAt: new Date().toISOString() }
       data.accounts = data.accounts.map(account => account.id === updatedAccount.id ? updatedAccount : account)
       for (const [token, session] of sessions) if (session.accountId === updatedAccount.id && token !== parseCookies(request)[sessionCookieNameForRole(requestedSessionRole(request))]) sessions.delete(token)
+      addAccountAudit(data, 'Password changed', updatedAccount, 'Portal password updated')
       await saveData(data)
       return send(response, 200, { status: 'password updated' })
     }
     if (request.method === 'GET' && url.pathname === '/api/system-admin/overview') return send(response, 200, { accounts: { total: data.accounts.length, active: data.accounts.filter(account => account.active !== false).length, pendingActivation: data.accounts.filter(account => account.activationExpiresAt && Date.parse(account.activationExpiresAt) > Date.now()).length }, integrations: [{ name: 'M-Pesa Daraja', configured: Boolean(process.env.MPESA_CONSUMER_KEY && process.env.MPESA_CONSUMER_SECRET && process.env.MPESA_PASSKEY) }, { name: 'BlessedTexts SMS', configured: Boolean(process.env.BLESSEDTEXTS_API_KEY && process.env.SMS_SENDER_ID) }, { name: 'School email', configured: Boolean(process.env.SMTP_HOST && process.env.SMTP_USER) }], security: { secureCookies: isProduction, allowedOrigins: allowedOrigins.size, twoFactorAuthentication: false } })
+    if (request.method === 'GET' && url.pathname === '/api/system-admin/logs') { const accountLogs=(data.accountAudit||[]).map(item=>({ id:`account-${item.id}`, area:'System access', action:item.action||'Account activity', detail:item.detail||item.accountName||'', by:item.by||item.performedBy||'System', createdAt:item.createdAt })); const financeLogs=(data.financeAudit||[]).map(item=>({ id:`finance-${item.id}`, area:'Finance', action:`${item.action||'Updated'} ${item.recordType||'record'}`, detail:item.detail||'', by:item.by||'System', createdAt:item.createdAt })); return send(response,200,[...accountLogs,...financeLogs].sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||''))).slice(0,300)) }
     if (request.method === 'GET' && url.pathname === '/api/public/website-settings') return send(response,200,data.websiteSettings)
     if (request.method === 'GET' && url.pathname === '/api/system-admin/website-settings') return send(response,200,data.websiteSettings)
     if (request.method === 'PUT' && url.pathname === '/api/system-admin/website-settings') { const input=await body(request);const link=value=>/^https?:\/\//i.test(String(value||''))?text(value,300):'';data.websiteSettings={socialLinks:{facebook:link(input.socialLinks?.facebook),instagram:link(input.socialLinks?.instagram),youtube:link(input.socialLinks?.youtube),tiktok:link(input.socialLinks?.tiktok)},gallery:(Array.isArray(input.gallery)?input.gallery:[]).map(link).filter(Boolean).slice(0,6)};await saveData(data);return send(response,200,data.websiteSettings) }
