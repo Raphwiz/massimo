@@ -25,6 +25,7 @@ async function request(path, options = {}) {
 export const getCalendarEvents = () => request('/api/calendar-events')
 export const loginPortal = (credentials) => request('/api/auth/login', { method: 'POST', body: JSON.stringify(credentials) })
 export const getPortalSession = () => request('/api/auth/session')
+export const touchPortalSession = () => request('/api/auth/activity', { method: 'POST', body: JSON.stringify({}) })
 export const logoutPortal = () => request('/api/auth/logout', { method: 'POST' })
 export const changePortalPassword = (passwords) => request('/api/auth/change-password', { method: 'POST', body: JSON.stringify(passwords) })
 export const activatePortalAccount = (details) => request('/api/auth/activate', { method: 'POST', body: JSON.stringify(details) })

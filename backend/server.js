@@ -29,7 +29,7 @@ if (!isProduction) {
 }
 const sessionCookiePrefix = 'st_dorothy_portal_'
 const sessionDurationMs = 8 * 60 * 60 * 1000
-const sessionIdleTimeoutMs = 5 * 60 * 1000
+const sessionIdleTimeoutMs = 10 * 60 * 1000
 const sessions = new Map()
 const rateBuckets = new Map()
 const initialPortalPassword = process.env.INITIAL_PORTAL_PASSWORD || 'Dorothy@2026'
@@ -247,6 +247,7 @@ function sessionAccount(request, data) {
 function routeRoles(method, path) {
   if ((method === 'GET' && ['/api/health', '/api/public/notices', '/api/calendar-events'].includes(path)) || (method === 'POST' && (path === '/api/auth/login' || path === '/api/auth/activate' || path === '/api/admission-enquiries'))) return null
   if (method === 'POST' && path === '/api/auth/logout') return ['system-admin', 'headteacher', 'secretary', 'teacher', 'bursar', 'parent']
+  if (method === 'POST' && path === '/api/auth/activity') return ['system-admin', 'headteacher', 'secretary', 'teacher', 'bursar', 'parent']
   if (method === 'POST' && path === '/api/auth/change-password') return ['system-admin', 'headteacher', 'secretary', 'teacher', 'bursar', 'parent']
   if (method === 'GET' && path === '/api/auth/session') return ['system-admin', 'headteacher', 'secretary', 'teacher', 'bursar', 'parent']
   if (path === '/api/system-admin/overview') return ['system-admin']
@@ -959,6 +960,7 @@ const server = createServer(async (request, response) => {
       return send(response, 200, { id: account.id, role: account.role, roles: accountRoles(account), name: account.name, title: account.title, parentPhone: account.parentPhone || '', mustChangePassword: Boolean(account.mustChangePassword) })
     }
     if (request.method === 'GET' && url.pathname === '/api/auth/session') return send(response, 200, { id: request.account.id, role: requestedSessionRole(request) || request.account.role, roles: accountRoles(request.account), name: request.account.name, title: request.account.title || '', parentPhone: request.account.parentPhone || '', mustChangePassword: Boolean(request.account.mustChangePassword) })
+    if (request.method === 'POST' && url.pathname === '/api/auth/activity') return send(response, 200, { status: 'active' })
     if (request.method === 'POST' && url.pathname === '/api/auth/activate') {
       if (signInRateLimited(request, 'activation', 8, 15 * 60_000)) return send(response, 429, { error: 'Too many activation attempts. Please wait 15 minutes before trying again.' })
       const input = await body(request)
