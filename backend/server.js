@@ -839,17 +839,20 @@ async function createReceiptPdf(receipt) {
   detail('GRADE / CLASS', receipt.className, 197)
   detail('PAYMENT DATE', receipt.paymentDate || String(receipt.issuedAt || '').slice(0, 10), 197, 210)
   heading('Account summary', 232)
-  document.rect(36, 249, 348, 22).fill('#EEF6FF')
-  document.fillColor('#173662').font('Helvetica-Bold').fontSize(8.5).text('Amount received', 46, 256).text(money(receipt.amount), 254, 256, { width: 120, align: 'right' })
-  document.rect(36, 274, 348, 22).fill('#E6F4E9')
-  document.fillColor('#1F7044').font('Helvetica-Bold').fontSize(8.5).text('Remaining balance after payment', 46, 281).text(receipt.remainingBalance === null || receipt.remainingBalance === undefined ? 'Not available' : money(receipt.remainingBalance), 254, 281, { width: 120, align: 'right' })
-  heading('Payment record', 317)
-  document.fillColor('#536B84').font('Helvetica-Bold').fontSize(7).text('CHANNEL', 36, 335).text('REFERENCE', 151, 335).text('SERVED BY', 272, 335)
-  document.moveTo(36, 346).lineTo(384, 346).stroke('#B8C9DA')
-  document.fillColor('#173662').font('Helvetica').fontSize(8).text(receipt.paymentMethod || 'Not recorded', 36, 354, { width: 105 }).text(receipt.paymentReference || 'Not recorded', 151, 354, { width: 111 }).text(receipt.servedBy || 'School office', 272, 354, { width: 112 })
-  document.moveTo(36, 377).lineTo(384, 377).stroke('#D8A20C')
-  document.fillColor('#173662').font('Helvetica-Bold').fontSize(8.8).text(`Served by ${receipt.servedBy || 'School office'}. Thank you.`, 36, 391, { width: 348, align: 'center' })
-  document.fillColor('#536B84').font('Helvetica').fontSize(6.8).text('This is a computer-generated school-fee receipt. Keep it for account verification.', 36, 407, { width: 348, align: 'center' }); document.end(); return finished
+  const balanceText = value => value === null || value === undefined ? 'Not available' : money(value)
+  document.rect(36, 249, 348, 22).fill('#F3F6F9')
+  document.fillColor('#173662').font('Helvetica-Bold').fontSize(8.5).text('Balance before payment', 46, 256).text(balanceText(receipt.balanceBeforePayment), 254, 256, { width: 120, align: 'right' })
+  document.rect(36, 274, 348, 22).fill('#EEF6FF')
+  document.fillColor('#173662').font('Helvetica-Bold').fontSize(8.5).text('Amount received', 46, 281).text(money(receipt.amount), 254, 281, { width: 120, align: 'right' })
+  document.rect(36, 299, 348, 22).fill('#E6F4E9')
+  document.fillColor('#1F7044').font('Helvetica-Bold').fontSize(8.5).text('Remaining balance after payment', 46, 306).text(balanceText(receipt.remainingBalance), 254, 306, { width: 120, align: 'right' })
+  heading('Payment record', 342)
+  document.fillColor('#536B84').font('Helvetica-Bold').fontSize(7).text('CHANNEL', 36, 360).text('REFERENCE', 151, 360).text('SERVED BY', 272, 360)
+  document.moveTo(36, 371).lineTo(384, 371).stroke('#B8C9DA')
+  document.fillColor('#173662').font('Helvetica').fontSize(8).text(receipt.paymentMethod || 'Not recorded', 36, 379, { width: 105 }).text(receipt.paymentReference || 'Not recorded', 151, 379, { width: 111 }).text(receipt.servedBy || 'School office', 272, 379, { width: 112 })
+  document.moveTo(36, 402).lineTo(384, 402).stroke('#D8A20C')
+  document.fillColor('#173662').font('Helvetica-Bold').fontSize(8.8).text(`Served by ${receipt.servedBy || 'School office'}. Thank you.`, 36, 416, { width: 348, align: 'center' })
+  document.fillColor('#536B84').font('Helvetica').fontSize(6.8).text('This is a computer-generated school-fee receipt. Keep it for account verification.', 36, 432, { width: 348, align: 'center' }); document.end(); return finished
 }
 
 function receiptForPrint(data, receipt, servedBy) {
@@ -862,7 +865,8 @@ function receiptForPrint(data, receipt, servedBy) {
       .reduce((total, item) => total + Number(item.amount || 0), 0)
     remainingBalance = currentFeeSummary(data, learner).balance + paymentsAfterThisReceipt
   }
-  return { ...receipt, remainingBalance, servedBy: servedBy || receipt.servedBy || 'School office' }
+  const balanceBeforePayment = remainingBalance === null ? null : remainingBalance + Number(receipt.amount || 0)
+  return { ...receipt, remainingBalance, balanceBeforePayment, servedBy: servedBy || receipt.servedBy || 'School office' }
 }
 
 function learnerAttendanceSummary(data, admissionId) {
