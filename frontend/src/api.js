@@ -37,6 +37,8 @@ export const updatePortalAccountRole = (id, role, action = 'grant') => request(`
 export const deletePortalAccount = (id) => request(`/api/accounts/${encodeURIComponent(id)}`, { method: 'DELETE' })
 export const getSystemAdminOverview = () => request('/api/system-admin/overview')
 export const getSystemLogs = () => request('/api/system-admin/logs')
+export const getSystemBackupStatus = () => request('/api/system-admin/backup/status')
+export const systemBackupDownloadUrl = () => `${typeof window!=='undefined'&&['localhost','127.0.0.1'].includes(window.location.hostname)?'http://127.0.0.1:8787':''}/api/system-admin/backup/download`
 export const getHeadteacherDashboard = () => request('/api/headteacher/dashboard')
 export const getHeadteacherAttendance = (date) => request(`/api/headteacher/attendance?date=${encodeURIComponent(date || '')}`)
 export const getGoLivePreview = () => request('/api/system-admin/go-live')
