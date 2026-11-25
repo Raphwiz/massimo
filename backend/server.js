@@ -29,6 +29,7 @@ if (!isProduction) {
 }
 const sessionCookiePrefix = 'st_dorothy_portal_'
 const sessionDurationMs = 8 * 60 * 60 * 1000
+const sessionIdleTimeoutMs = 5 * 60 * 1000
 const sessions = new Map()
 const rateBuckets = new Map()
 const initialPortalPassword = process.env.INITIAL_PORTAL_PASSWORD || 'Dorothy@2026'
@@ -218,7 +219,8 @@ function requestedSessionRole(request) {
 
 function createSession(response, account) {
   const token = randomBytes(32).toString('base64url')
-  sessions.set(token, { accountId: account.id, expiresAt: Date.now() + sessionDurationMs })
+  const now = Date.now()
+  sessions.set(token, { accountId: account.id, expiresAt: now + sessionDurationMs, lastActiveAt: now })
   const cookies = accountRoles(account).map(role => { const cookie = [`${sessionCookieNameForRole(role)}=${token}`, 'HttpOnly', 'SameSite=Lax', 'Path=/', `Max-Age=${Math.floor(sessionDurationMs / 1000)}`]; if (isProduction) cookie.push('Secure'); return cookie.join('; ') })
   response.setHeader('Set-Cookie', cookies)
 }
@@ -234,9 +236,11 @@ function sessionAccount(request, data) {
   const namedTokens = role ? [cookies[sessionCookieNameForRole(role)]] : Object.entries(cookies).filter(([name]) => name.startsWith(sessionCookiePrefix)).map(([, token]) => token)
   const token = namedTokens.filter(Boolean)[0]
   const session = token && sessions.get(token)
-  if (!session || session.expiresAt <= Date.now()) { if (token) sessions.delete(token); return null }
+  const now = Date.now()
+  if (!session || session.expiresAt <= now || now - session.lastActiveAt >= sessionIdleTimeoutMs) { if (token) sessions.delete(token); return null }
   const account = data.accounts.find(item => item.id === session.accountId && item.active !== false)
   if (!account || (role && !accountHasRole(account, role))) { sessions.delete(token); return null }
+  session.lastActiveAt = now
   return account
 }
 
@@ -294,7 +298,7 @@ function requireAccess(request, response, data, url) {
   if (roles === null) return true
   if (!roles.length) { send(response, 404, { error: 'Endpoint not found.' }); return false }
   const account = sessionAccount(request, data)
-  if (!account) { send(response, 401, { error: 'Please sign in to continue.' }); return false }
+  if (!account) { clearSession(request, response); send(response, 401, { error: 'Please sign in to continue.' }); return false }
   if (!roles.some(role => accountHasRole(account, role))) { send(response, 403, { error: 'You do not have permission to access this resource.' }); return false }
   if (account.mustChangePassword && url.pathname !== '/api/auth/change-password' && url.pathname !== '/api/auth/logout') { send(response, 403, { error: 'Change your temporary password before accessing the portal.' }); return false }
   request.account = account

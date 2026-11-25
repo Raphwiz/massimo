@@ -6,6 +6,7 @@ async function send(path, options = {}) {
     ...options
   })
   const payload = await response.json().catch(() => ({}))
+  if (response.status === 401 && typeof window !== 'undefined' && !String(path).endsWith('/api/auth/logout')) window.dispatchEvent(new Event('st-dorothy-session-expired'))
   if (!response.ok) throw new Error(payload.error || 'The school portal server is unavailable.')
   return payload
 }
