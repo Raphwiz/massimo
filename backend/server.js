@@ -262,8 +262,8 @@ function routeRoles(method, path) {
   if (path === '/api/system-admin/go-live') return ['system-admin']
   if (path === '/api/system-admin/website-settings') return ['system-admin']
   if (path === '/api/public/website-settings') return null
-  if (path === '/api/accounts' || path.startsWith('/api/accounts/')) return ['system-admin', 'headteacher']
-  if (path === '/api/parent-portal') return ['secretary', 'system-admin']
+  if (path === '/api/accounts' || path.startsWith('/api/accounts/')) return ['system-admin']
+  if (path === '/api/parent-portal') return ['system-admin']
   if (path === '/api/finance/approval-requests') return method === 'POST' ? ['bursar'] : ['bursar', 'headteacher']
   if (path.startsWith('/api/finance/approval-requests/')) return ['headteacher']
   // The secretary may confirm a payment only after receiving the school's payment notification.
@@ -1134,6 +1134,7 @@ const server = createServer(async (request, response) => {
       const baseAccount = { id: `account-${Date.now()}-${randomBytes(4).toString('hex')}`, identifier, role, name, title: title || (role === 'parent' ? 'Parent / Guardian' : role), parentPhone: role === 'parent' ? identifier : '', active: true, createdAt: new Date().toISOString() }
       const activation = issueActivation(baseAccount)
       data.accounts.push(activation.account)
+      if (role === 'teacher' && !data.staff.some(item => String(item.email || '').trim().toLowerCase() === identifier.toLowerCase())) data.staff.push({ id: `staff-${Date.now()}-${randomBytes(3).toString('hex')}`, fullName: name, role: 'Teacher', staffType: 'Teaching', phone: '', email: identifier, employmentStatus: 'Active', createdAt: new Date().toISOString(), createdBy: request.account.name })
       await saveData(data)
       return send(response, 201, { account: portalAccountForClient(activation.account), activation: { code: activation.code, expiresAt: activation.account.activationExpiresAt, message: activationMessage(activation.account, activation.code, activation.account.activationExpiresAt) } })
     }
@@ -1259,7 +1260,12 @@ const server = createServer(async (request, response) => {
       if (schoolClassesAdded) await saveData(data)
       return send(response, 200, { defaultClassCapacity, classes: data.schoolClasses, placements: data.classPlacements })
     }
-    if (request.method === 'GET' && url.pathname === '/api/staff') return send(response, 200, data.staff)
+    if (request.method === 'GET' && url.pathname === '/api/staff') {
+      const teacherAccounts = data.accounts.filter(account => account.role === 'teacher' && account.active !== false)
+      const staffEmails = new Set(data.staff.map(item => String(item.email || '').trim().toLowerCase()).filter(Boolean))
+      const accountTeachers = teacherAccounts.filter(account => !staffEmails.has(String(account.identifier || '').trim().toLowerCase())).map(account => ({ id: `account-staff-${account.id}`, accountId: account.id, fullName: account.name, role: 'Teacher', staffType: 'Teaching', phone: '', email: account.identifier, employmentStatus: 'Active', source: 'Portal account' }))
+      return send(response, 200, [...data.staff, ...accountTeachers])
+    }
     if (request.method === 'GET' && url.pathname === '/api/academics') {
       if (request.account.role !== 'teacher') return send(response, 200, { subjects: data.subjects, assignments: data.teacherAssignments, timetable: data.timetableEntries, assessments: data.assessments })
       const teacherName = String(request.account.name || '').trim().toLowerCase()
@@ -1724,7 +1730,8 @@ const server = createServer(async (request, response) => {
 
     if (request.method === 'POST' && url.pathname === '/api/teacher-assignments') {
       const input = await body(request)
-      const staff = data.staff.find(item => item.id === text(input.staffId, 80))
+      const staffId = text(input.staffId, 100)
+      const staff = data.staff.find(item => item.id === staffId) || (() => { const accountId = staffId.startsWith('account-staff-') ? staffId.slice('account-staff-'.length) : ''; const account = data.accounts.find(item => item.id === accountId && item.role === 'teacher' && item.active !== false); return account ? { id: staffId, fullName: account.name } : null })()
       const schoolClass = data.schoolClasses.find(item => item.id === text(input.classId, 80))
       const subject = data.subjects.find(item => item.id === text(input.subjectId, 80))
       if (!staff || !schoolClass || !subject) return send(response, 400, { error: 'Choose a staff member, class, and subject.' })
