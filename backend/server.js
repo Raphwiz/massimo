@@ -255,6 +255,7 @@ function routeRoles(method, path) {
   if (path === '/api/system-admin/logs') return ['system-admin']
   if (path === '/api/system-admin/backup/status' || path === '/api/system-admin/backup/download' || path === '/api/system-admin/backup/restore') return ['system-admin']
   if (path === '/api/headteacher/dashboard') return ['headteacher']
+  if (path === '/api/headteacher/academics') return ['headteacher']
   if (path === '/api/headteacher/attendance') return ['headteacher']
   if (path === '/api/teacher/dashboard') return ['teacher']
   if (path === '/api/system-admin/go-live') return ['system-admin']
@@ -294,6 +295,7 @@ function routeRoles(method, path) {
   if (path === '/api/lesson-plans') return ['headteacher', 'teacher']
   if (path.startsWith('/api/lesson-plans/')) return ['headteacher', 'teacher']
   if (path === '/api/leave-requests') return ['headteacher', 'teacher']
+  if (path.startsWith('/api/leave-requests/')) return ['headteacher']
   if (path === '/api/attendance' || path === '/api/attendance/workbook' || path === '/api/assessments' || path === '/api/assessment-marks') return ['headteacher', 'teacher']
   if (path === '/api/fee-structures') return ['bursar']
   return []
@@ -1043,7 +1045,28 @@ const server = createServer(async (request, response) => {
     if (request.method === 'GET' && url.pathname === '/api/public/website-settings') return send(response,200,data.websiteSettings)
     if (request.method === 'GET' && url.pathname === '/api/system-admin/website-settings') return send(response,200,data.websiteSettings)
     if (request.method === 'PUT' && url.pathname === '/api/system-admin/website-settings') { const input=await body(request);const link=value=>/^https?:\/\//i.test(String(value||''))?text(value,300):'';data.websiteSettings={socialLinks:{facebook:link(input.socialLinks?.facebook),instagram:link(input.socialLinks?.instagram),youtube:link(input.socialLinks?.youtube),tiktok:link(input.socialLinks?.tiktok)},gallery:(Array.isArray(input.gallery)?input.gallery:[]).map(link).filter(Boolean).slice(0,6)};await saveData(data);return send(response,200,data.websiteSettings) }
-    if (request.method === 'GET' && url.pathname === '/api/headteacher/dashboard') { const latestDate=data.attendanceRecords.map(item=>item.date).sort().at(-1)||''; const attendance=latestDate?data.attendanceRecords.filter(item=>item.date===latestDate):[]; const present=attendance.filter(item=>item.status==='Present'||item.status==='Late').length; const pendingApprovals=(data.financeApprovals||[]).filter(item=>item.status==='Pending Headteacher approval').length; const pendingAdmissions=data.admissions.filter(item=>!item.placement||item.placement.decision!=='Confirmed').length; return send(response,200,{learners:data.admissions.length,staff:data.staff.length,attendance:{date:latestDate,total:attendance.length,present,percentage:attendance.length?Math.round(present/attendance.length*100):null},pendingAdmissions,pendingApprovals,recentNotices:data.notices.filter(item=>item.status==='Published').slice(0,3),recentClasses:data.schoolClasses.filter(item=>item.status==='Active').slice(0,6)}) }
+    if (request.method === 'GET' && url.pathname === '/api/headteacher/dashboard') {
+      const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Nairobi' }).format(new Date())
+      const activeClasses = data.schoolClasses.filter(item => item.status === 'Active')
+      const activeStaff = data.staff.filter(item => item.employmentStatus !== 'Inactive')
+      const classAttendance = activeClasses.map(schoolClass => {
+        const enrolled = data.admissions.filter(item => item.placement?.className === schoolClass.className).length
+        const records = data.attendanceRecords.filter(item => item.className === schoolClass.className && item.date === today)
+        const present = records.filter(item => item.status === 'Present' || item.status === 'Late').length
+        return { className: schoolClass.className, enrolled, marked: records.length, present, percentage: enrolled ? Math.round(present / enrolled * 100) : null }
+      })
+      const staffRecords = data.staffAttendance.filter(item => item.date === today)
+      const assessmentProgress = data.assessments.map(assessment => {
+        const enrolled = data.admissions.filter(item => item.placement?.className === assessment.className).length
+        const marks = data.assessmentMarks.filter(item => item.assessmentId === assessment.id)
+        return { id: assessment.id, title: assessment.title, className: assessment.className, subjectName: assessment.subjectName, enrolled, entered: marks.length, missing: Math.max(0, enrolled - marks.length) }
+      })
+      return send(response, 200, { today, learners: data.admissions.length, staff: activeStaff.length, activeClasses: activeClasses.length, pendingAdmissions: data.admissions.filter(item => !item.placement || item.placement.decision !== 'Confirmed').length, unassignedClasses: activeClasses.filter(item => !item.classTeacher).length, classAttendance, incompleteAttendance: classAttendance.filter(item => item.enrolled > 0 && item.marked < item.enrolled).length, staffAttendance: { present: staffRecords.filter(item => item.status === 'Present' || item.status === 'Late').length, marked: staffRecords.length, total: activeStaff.length }, assessments: assessmentProgress, marksMissing: assessmentProgress.reduce((sum, item) => sum + item.missing, 0), lessonPlans: { review: data.lessonPlans.filter(item => item.status === 'Ready for review').length, draft: data.lessonPlans.filter(item => item.status === 'Draft').length, published: data.lessonPlans.filter(item => item.status === 'Published').length }, pendingLeave: data.leaveRequests.filter(item => item.status === 'Pending').length, recentNotices: data.notices.filter(item => item.status === 'Published').slice(0, 4) })
+    }
+    if (request.method === 'GET' && url.pathname === '/api/headteacher/academics') {
+      const assessments = data.assessments.map(assessment => { const enrolled = data.admissions.filter(item => item.placement?.className === assessment.className).length; const marks = data.assessmentMarks.filter(item => item.assessmentId === assessment.id); const percentages = marks.map(mark => Number(assessment.outOf) > 0 ? Number(mark.score || 0) / Number(assessment.outOf) * 100 : 0); return { ...assessment, enrolled, entered: marks.length, missing: Math.max(0, enrolled - marks.length), average: percentages.length ? Math.round(percentages.reduce((sum, value) => sum + value, 0) / percentages.length) : null } })
+      return send(response, 200, { assessments })
+    }
     if (request.method === 'GET' && url.pathname === '/api/headteacher/attendance') { const date=text(url.searchParams.get('date'),10); const classes=data.schoolClasses.filter(item=>item.status==='Active').map(item=>item.className); const rows=classes.map(className=>{const enrolled=data.admissions.filter(item=>(item.placement?.className||item.grade)===className).length;const records=data.attendanceRecords.filter(item=>item.className===className&&(!date||item.date===date));const present=records.filter(item=>item.status==='Present').length;const late=records.filter(item=>item.status==='Late').length;const absent=records.filter(item=>item.status==='Absent').length;const excused=records.filter(item=>item.status==='Excused').length;return {className,enrolled,marked:records.length,present,late,absent,excused,percentage:enrolled?Math.round((present+late)/enrolled*100):null}});return send(response,200,{date,classes:rows}) }
     if (request.method === 'GET' && url.pathname === '/api/teacher/dashboard') {
       const teacherName = String(request.account.name || '').trim().toLowerCase()
@@ -1834,6 +1857,9 @@ const server = createServer(async (request, response) => {
         assessment: text(input.assessment, 900),
         reflection: text(input.reflection, 900),
         status: ['Draft', 'Ready for review', 'Published'].includes(text(input.status, 30)) ? text(input.status, 30) : 'Draft',
+        reviewNote: request.account.role === 'headteacher' ? text(input.reviewNote, 600) : existing.reviewNote,
+        reviewedBy: request.account.role === 'headteacher' ? request.account.name : existing.reviewedBy,
+        reviewedAt: request.account.role === 'headteacher' ? new Date().toISOString() : existing.reviewedAt,
         updatedAt: new Date().toISOString()
       }
       data.lessonPlans = data.lessonPlans.map(item => item.id === id ? updated : item)
@@ -1865,6 +1891,19 @@ const server = createServer(async (request, response) => {
       data.leaveRequests.unshift(requestItem)
       await saveData(data)
       return send(response, 201, requestItem)
+    }
+
+    if (request.method === 'PUT' && url.pathname.startsWith('/api/leave-requests/')) {
+      const id = decodeURIComponent(url.pathname.slice('/api/leave-requests/'.length))
+      const existing = data.leaveRequests.find(item => item.id === id)
+      if (!existing) return send(response, 404, { error: 'Leave request not found.' })
+      const input = await body(request)
+      const decision = text(input.decision, 20)
+      if (!['Approved', 'Rejected'].includes(decision)) return send(response, 400, { error: 'Choose Approve or Reject.' })
+      const updated = { ...existing, status: decision, decisionNote: text(input.note, 500), decidedBy: request.account.name, decidedAt: new Date().toISOString() }
+      data.leaveRequests = data.leaveRequests.map(item => item.id === id ? updated : item)
+      await saveData(data)
+      return send(response, 200, updated)
     }
 
     if (request.method === 'POST' && url.pathname === '/api/staff-attendance') {
