@@ -256,6 +256,7 @@ function routeRoles(method, path) {
   if (path === '/api/system-admin/backup/status' || path === '/api/system-admin/backup/download' || path === '/api/system-admin/backup/restore') return ['system-admin']
   if (path === '/api/headteacher/dashboard') return ['headteacher']
   if (path === '/api/headteacher/attendance') return ['headteacher']
+  if (path === '/api/teacher/dashboard') return ['teacher']
   if (path === '/api/system-admin/go-live') return ['system-admin']
   if (path === '/api/system-admin/website-settings') return ['system-admin']
   if (path === '/api/public/website-settings') return null
@@ -277,7 +278,7 @@ function routeRoles(method, path) {
   if (path === '/api/notices') return method === 'GET' ? ['headteacher', 'secretary', 'teacher', 'bursar', 'parent'] : ['secretary']
   if (path.startsWith('/api/documents')) return ['secretary']
   if (path === '/api/sms' || path === '/api/sms/wallet' || path === '/api/sms/topups') return ['secretary']
-  if (path === '/api/admissions') return method === 'GET' ? ['secretary', 'headteacher'] : ['secretary']
+  if (path === '/api/admissions') return method === 'GET' ? ['secretary', 'headteacher', 'teacher'] : ['secretary']
   if (path.startsWith('/api/admissions/')) return ['secretary']
   if (path.startsWith('/api/learner-import/')) return ['system-admin']
   if (path === '/api/calendar-events') return ['secretary']
@@ -1044,6 +1045,35 @@ const server = createServer(async (request, response) => {
     if (request.method === 'PUT' && url.pathname === '/api/system-admin/website-settings') { const input=await body(request);const link=value=>/^https?:\/\//i.test(String(value||''))?text(value,300):'';data.websiteSettings={socialLinks:{facebook:link(input.socialLinks?.facebook),instagram:link(input.socialLinks?.instagram),youtube:link(input.socialLinks?.youtube),tiktok:link(input.socialLinks?.tiktok)},gallery:(Array.isArray(input.gallery)?input.gallery:[]).map(link).filter(Boolean).slice(0,6)};await saveData(data);return send(response,200,data.websiteSettings) }
     if (request.method === 'GET' && url.pathname === '/api/headteacher/dashboard') { const latestDate=data.attendanceRecords.map(item=>item.date).sort().at(-1)||''; const attendance=latestDate?data.attendanceRecords.filter(item=>item.date===latestDate):[]; const present=attendance.filter(item=>item.status==='Present'||item.status==='Late').length; const pendingApprovals=(data.financeApprovals||[]).filter(item=>item.status==='Pending Headteacher approval').length; const pendingAdmissions=data.admissions.filter(item=>!item.placement||item.placement.decision!=='Confirmed').length; return send(response,200,{learners:data.admissions.length,staff:data.staff.length,attendance:{date:latestDate,total:attendance.length,present,percentage:attendance.length?Math.round(present/attendance.length*100):null},pendingAdmissions,pendingApprovals,recentNotices:data.notices.filter(item=>item.status==='Published').slice(0,3),recentClasses:data.schoolClasses.filter(item=>item.status==='Active').slice(0,6)}) }
     if (request.method === 'GET' && url.pathname === '/api/headteacher/attendance') { const date=text(url.searchParams.get('date'),10); const classes=data.schoolClasses.filter(item=>item.status==='Active').map(item=>item.className); const rows=classes.map(className=>{const enrolled=data.admissions.filter(item=>(item.placement?.className||item.grade)===className).length;const records=data.attendanceRecords.filter(item=>item.className===className&&(!date||item.date===date));const present=records.filter(item=>item.status==='Present').length;const late=records.filter(item=>item.status==='Late').length;const absent=records.filter(item=>item.status==='Absent').length;const excused=records.filter(item=>item.status==='Excused').length;return {className,enrolled,marked:records.length,present,late,absent,excused,percentage:enrolled?Math.round((present+late)/enrolled*100):null}});return send(response,200,{date,classes:rows}) }
+    if (request.method === 'GET' && url.pathname === '/api/teacher/dashboard') {
+      const teacherName = String(request.account.name || '').trim().toLowerCase()
+      const assignments = data.teacherAssignments.filter(item => String(item.staffName || '').trim().toLowerCase() === teacherName)
+      const assignedClassIds = new Set(assignments.map(item => item.classId))
+      const assignedClassNames = new Set(assignments.map(item => item.className))
+      data.schoolClasses.filter(item => String(item.classTeacher || '').trim().toLowerCase() === teacherName).forEach(item => { assignedClassIds.add(item.id); assignedClassNames.add(item.className) })
+      const classes = data.schoolClasses.filter(item => item.status === 'Active' && (assignedClassIds.has(item.id) || assignedClassNames.has(item.className))).map(schoolClass => {
+        const classAssignments = assignments.filter(item => item.classId === schoolClass.id || item.className === schoolClass.className)
+        return { ...schoolClass, subjects: [...new Set(classAssignments.map(item => item.subjectName).filter(Boolean))] }
+      })
+      const learners = data.admissions.filter(item => assignedClassNames.has(item.placement?.className || item.grade)).map(item => ({ id: item.id, learnerName: item.learnerName, admissionNumber: item.admissionNumber, className: item.placement?.className || item.grade, residency: item.residency || 'Day scholar', medicalNotes: item.medicalNotes || item.medicalAllergyNotes || '', guardianPhone: item.guardianPhone || item.fatherPhone || item.motherPhone || '' }))
+      const now = new Date()
+      const today = now.toLocaleDateString('en-CA', { timeZone: 'Africa/Nairobi' })
+      const day = new Intl.DateTimeFormat('en-US', { weekday: 'long', timeZone: 'Africa/Nairobi' }).format(now)
+      const attendance = classes.map(schoolClass => {
+        const enrolled = learners.filter(item => item.className === schoolClass.className).length
+        const records = data.attendanceRecords.filter(item => item.className === schoolClass.className && item.date === today)
+        const present = records.filter(item => item.status === 'Present' || item.status === 'Late').length
+        return { classId: schoolClass.id, className: schoolClass.className, enrolled, marked: records.length, present, percentage: enrolled && records.length >= enrolled ? Math.round(present / enrolled * 100) : null, status: !records.length ? 'Not started' : records.length < enrolled ? 'In progress' : 'Submitted' }
+      })
+      const assessments = data.assessments.filter(item => assignments.some(assignment => assignment.className === item.className && (!assignment.subjectName || assignment.subjectName === item.subjectName))).map(item => {
+        const enrolled = learners.filter(learner => learner.className === item.className).length
+        const entered = new Set(data.assessmentMarks.filter(mark => mark.assessmentId === item.id).map(mark => mark.admissionId)).size
+        return { ...item, enrolled, entered, pending: Math.max(enrolled - entered, 0) }
+      })
+      const timetable = data.timetableEntries.filter(item => String(item.staffName || '').trim().toLowerCase() === teacherName).sort((a, b) => String(a.time).localeCompare(String(b.time)))
+      const notices = data.notices.filter(item => item.status === 'Published' && ['All staff', 'All teaching staff', 'All portal users'].includes(item.audience)).slice(0, 4)
+      return send(response, 200, { today, day, classes, learners, assignments, attendance, assessments, timetable, notices })
+    }
     if (request.method === 'GET' && url.pathname === '/api/system-admin/go-live') return send(response, 200, { admissions: data.admissions.length, parentAccounts: data.accounts.filter(account => account.role === 'parent').length, receipts: data.receipts.length, mpesaTransactions: data.mpesaTransactions.length, attendanceRecords: data.attendanceRecords.length, assessments: data.assessments.length, documents: data.documentRecords.length, messages: data.parentMessages.length + data.internalMessages.length })
     if (request.method === 'POST' && url.pathname === '/api/system-admin/go-live') {
       const input = await body(request)
@@ -1157,6 +1187,12 @@ const server = createServer(async (request, response) => {
     if (request.method === 'GET' && url.pathname === '/api/sms/wallet') return send(response, 200, { balance: Number(data.smsWallet.balance || 0), pricePerCreditKes: Number(data.smsWallet.pricePerCreditKes || 0.8), senderId: text(process.env.SMS_SENDER_ID, 11) || '', gatewayConfigured: Boolean(process.env.BLESSEDTEXTS_API_KEY && process.env.SMS_SENDER_ID), topups: data.smsTopups.slice(0, 8) })
     if (request.method === 'GET' && url.pathname === '/api/admissions') {
       if (admissionNumbersAdded || schoolClassesAdded) await saveData(data)
+      if (request.account.role === 'teacher') {
+        const teacherName = String(request.account.name || '').trim().toLowerCase()
+        const assignedClasses = new Set(data.teacherAssignments.filter(item => String(item.staffName || '').trim().toLowerCase() === teacherName).map(item => item.className))
+        data.schoolClasses.filter(item => String(item.classTeacher || '').trim().toLowerCase() === teacherName).forEach(item => assignedClasses.add(item.className))
+        return send(response, 200, data.admissions.filter(item => assignedClasses.has(item.placement?.className || item.grade)))
+      }
       return send(response, 200, data.admissions)
     }
     if (request.method === 'GET' && url.pathname === '/api/secretary/learner-records') {
@@ -1185,14 +1221,21 @@ const server = createServer(async (request, response) => {
     }
     if (request.method === 'GET' && url.pathname === '/api/school-classes') {
       if (schoolClassesAdded) await saveData(data)
-      return send(response, 200, data.schoolClasses.sort((a, b) => a.academicYear.localeCompare(b.academicYear) || a.className.localeCompare(b.className)))
+      const classes = request.account.role === 'teacher' ? data.schoolClasses.filter(item => data.teacherAssignments.some(assignment => assignment.classId === item.id && String(assignment.staffName || '').trim().toLowerCase() === String(request.account.name || '').trim().toLowerCase()) || String(item.classTeacher || '').trim().toLowerCase() === String(request.account.name || '').trim().toLowerCase()) : data.schoolClasses
+      return send(response, 200, classes.sort((a, b) => a.academicYear.localeCompare(b.academicYear) || a.className.localeCompare(b.className)))
     }
     if (request.method === 'GET' && url.pathname === '/api/class-placements') {
       if (schoolClassesAdded) await saveData(data)
       return send(response, 200, { defaultClassCapacity, classes: data.schoolClasses, placements: data.classPlacements })
     }
     if (request.method === 'GET' && url.pathname === '/api/staff') return send(response, 200, data.staff)
-    if (request.method === 'GET' && url.pathname === '/api/academics') return send(response, 200, { subjects: data.subjects, assignments: data.teacherAssignments, timetable: data.timetableEntries, assessments: data.assessments })
+    if (request.method === 'GET' && url.pathname === '/api/academics') {
+      if (request.account.role !== 'teacher') return send(response, 200, { subjects: data.subjects, assignments: data.teacherAssignments, timetable: data.timetableEntries, assessments: data.assessments })
+      const teacherName = String(request.account.name || '').trim().toLowerCase()
+      const assignments = data.teacherAssignments.filter(item => String(item.staffName || '').trim().toLowerCase() === teacherName)
+      const assignmentKeys = new Set(assignments.map(item => `${item.className}|${item.subjectName}`))
+      return send(response, 200, { subjects: data.subjects, assignments, timetable: data.timetableEntries.filter(item => String(item.staffName || '').trim().toLowerCase() === teacherName), assessments: data.assessments.filter(item => assignmentKeys.has(`${item.className}|${item.subjectName}`)) })
+    }
     if (request.method === 'GET' && url.pathname === '/api/lesson-plans') {
       const plans = request.account.role === 'teacher' ? data.lessonPlans.filter(item => item.preparedBy === request.account.name) : data.lessonPlans
       return send(response, 200, plans.slice().sort((a, b) => `${b.lessonDate}${b.updatedAt}`.localeCompare(`${a.lessonDate}${a.updatedAt}`)))
@@ -1204,12 +1247,22 @@ const server = createServer(async (request, response) => {
     if (request.method === 'GET' && url.pathname === '/api/attendance') {
       const className = text(url.searchParams.get('className'), 60)
       const date = text(url.searchParams.get('date'), 10)
+      if (request.account.role === 'teacher') {
+        const teacherName = String(request.account.name || '').trim().toLowerCase()
+        const allowed = data.teacherAssignments.some(item => item.className === className && String(item.staffName || '').trim().toLowerCase() === teacherName) || data.schoolClasses.some(item => item.className === className && String(item.classTeacher || '').trim().toLowerCase() === teacherName)
+        if (!allowed) return send(response, 403, { error: 'You can view attendance only for your assigned classes.' })
+      }
       return send(response, 200, data.attendanceRecords.filter(item => (!className || item.className === className) && (!date || item.date === date)))
     }
     if (request.method === 'GET' && url.pathname === '/api/attendance/workbook') {
       const className = text(url.searchParams.get('className'), 60)
       const date = text(url.searchParams.get('date'), 10)
       if (!className || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return send(response, 400, { error: 'Choose a class and valid attendance date before downloading the Excel register.' })
+      if (request.account.role === 'teacher') {
+        const teacherName = String(request.account.name || '').trim().toLowerCase()
+        const allowed = data.teacherAssignments.some(item => item.className === className && String(item.staffName || '').trim().toLowerCase() === teacherName) || data.schoolClasses.some(item => item.className === className && String(item.classTeacher || '').trim().toLowerCase() === teacherName)
+        if (!allowed) return send(response, 403, { error: 'You can download attendance only for your assigned classes.' })
+      }
       const safeClass = className.replace(/[^a-zA-Z0-9]+/g, '_').replace(/^_|_$/g, '')
       const fileName = `st_dorothy_attendance_${safeClass}_${date}.xlsx`
       const savedRecords = data.attendanceRecords.filter(item => item.className === className && item.date === date)
@@ -1331,6 +1384,12 @@ const server = createServer(async (request, response) => {
     }
     if (request.method === 'GET' && url.pathname === '/api/assessment-marks') {
       const assessmentId = text(url.searchParams.get('assessmentId'), 80)
+      if (request.account.role === 'teacher') {
+        const assessment = data.assessments.find(item => item.id === assessmentId)
+        const teacherName = String(request.account.name || '').trim().toLowerCase()
+        const allowed = assessment && data.teacherAssignments.some(item => item.className === assessment.className && item.subjectName === assessment.subjectName && String(item.staffName || '').trim().toLowerCase() === teacherName)
+        if (!allowed) return send(response, 403, { error: 'You can view marks only for your assigned classes and subjects.' })
+      }
       return send(response, 200, data.assessmentMarks.filter(item => !assessmentId || item.assessmentId === assessmentId))
     }
     if (request.method === 'GET' && url.pathname === '/api/parent/learners') {
@@ -1663,6 +1722,7 @@ const server = createServer(async (request, response) => {
       const title = text(input.title, 100)
       const outOf = Number(input.outOf)
       if (!className || !subjectName || !title || !Number.isFinite(outOf) || outOf <= 0) return send(response, 400, { error: 'Class, subject, assessment title, and maximum score are required.' })
+      if (request.account.role === 'teacher' && !data.teacherAssignments.some(item => item.className === className && item.subjectName === subjectName && String(item.staffName || '').trim().toLowerCase() === String(request.account.name || '').trim().toLowerCase())) return send(response, 403, { error: 'You can create assessments only for your assigned classes and subjects.' })
       const assessment = { id: `assessment-${Date.now()}`, className, subjectName, title, outOf, term: text(input.term, 20) || 'Term 3', academicYear: text(input.academicYear, 10) || '2026', createdAt: new Date().toISOString() }
       data.assessments.push(assessment)
       await saveData(data)
@@ -1674,6 +1734,7 @@ const server = createServer(async (request, response) => {
       const assessment = data.assessments.find(item => item.id === text(input.assessmentId, 80))
       const marks = Array.isArray(input.marks) ? input.marks : []
       if (!assessment || !marks.length) return send(response, 400, { error: 'Choose an assessment and enter at least one mark.' })
+      if (request.account.role === 'teacher' && !data.teacherAssignments.some(item => item.className === assessment.className && item.subjectName === assessment.subjectName && String(item.staffName || '').trim().toLowerCase() === String(request.account.name || '').trim().toLowerCase())) return send(response, 403, { error: 'You can enter marks only for your assigned classes and subjects.' })
       const timestamp = new Date().toISOString()
       const updated = marks.map(item => {
         const learner = data.admissions.find(application => application.id === text(item.admissionId, 80))
@@ -1693,6 +1754,11 @@ const server = createServer(async (request, response) => {
       const date = text(input.date, 10)
       const entries = Array.isArray(input.entries) ? input.entries : []
       if (!className || !/^\d{4}-\d{2}-\d{2}$/.test(date) || !entries.length) return send(response, 400, { error: 'Class, date, and learner attendance are required.' })
+      if (request.account.role === 'teacher') {
+        const teacherName = String(request.account.name || '').trim().toLowerCase()
+        const allowed = data.teacherAssignments.some(item => item.className === className && String(item.staffName || '').trim().toLowerCase() === teacherName) || data.schoolClasses.some(item => item.className === className && String(item.classTeacher || '').trim().toLowerCase() === teacherName)
+        if (!allowed) return send(response, 403, { error: 'You can save attendance only for your assigned classes.' })
+      }
       const timestamp = new Date().toISOString()
       const records = entries.map(entry => {
         const learner = data.admissions.find(application => application.id === text(entry.admissionId, 80) && (application.placement?.className || application.grade) === className)
