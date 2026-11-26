@@ -42,6 +42,7 @@ export const getSystemBackupStatus = () => request('/api/system-admin/backup/sta
 export const systemBackupDownloadUrl = () => `${typeof window!=='undefined'&&['localhost','127.0.0.1'].includes(window.location.hostname)?'http://127.0.0.1:8787':''}/api/system-admin/backup/download`
 export const getHeadteacherDashboard = () => request('/api/headteacher/dashboard')
 export const getHeadteacherAcademics = () => request('/api/headteacher/academics')
+export const getHeadteacherLearners = () => request('/api/headteacher/learners')
 export const getHeadteacherAttendance = (date) => request(`/api/headteacher/attendance?date=${encodeURIComponent(date || '')}`)
 export const getGoLivePreview = () => request('/api/system-admin/go-live')
 export const runGoLiveReset = (details) => request('/api/system-admin/go-live', { method: 'POST', body: JSON.stringify(details) })

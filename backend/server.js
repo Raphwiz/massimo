@@ -256,6 +256,7 @@ function routeRoles(method, path) {
   if (path === '/api/system-admin/backup/status' || path === '/api/system-admin/backup/download' || path === '/api/system-admin/backup/restore') return ['system-admin']
   if (path === '/api/headteacher/dashboard') return ['headteacher']
   if (path === '/api/headteacher/academics') return ['headteacher']
+  if (path === '/api/headteacher/learners') return ['headteacher']
   if (path === '/api/headteacher/attendance') return ['headteacher']
   if (path === '/api/teacher/dashboard') return ['teacher']
   if (path === '/api/system-admin/go-live') return ['system-admin']
@@ -1066,6 +1067,13 @@ const server = createServer(async (request, response) => {
     if (request.method === 'GET' && url.pathname === '/api/headteacher/academics') {
       const assessments = data.assessments.map(assessment => { const enrolled = data.admissions.filter(item => item.placement?.className === assessment.className).length; const marks = data.assessmentMarks.filter(item => item.assessmentId === assessment.id); const percentages = marks.map(mark => Number(assessment.outOf) > 0 ? Number(mark.score || 0) / Number(assessment.outOf) * 100 : 0); return { ...assessment, enrolled, entered: marks.length, missing: Math.max(0, enrolled - marks.length), average: percentages.length ? Math.round(percentages.reduce((sum, value) => sum + value, 0) / percentages.length) : null } })
       return send(response, 200, { assessments })
+    }
+    if (request.method === 'GET' && url.pathname === '/api/headteacher/learners') {
+      const learners = data.admissions.map(learner => ({
+        ...learner,
+        finance: currentFeeSummary(data, learner)
+      }))
+      return send(response, 200, learners)
     }
     if (request.method === 'GET' && url.pathname === '/api/headteacher/attendance') { const date=text(url.searchParams.get('date'),10); const classes=data.schoolClasses.filter(item=>item.status==='Active').map(item=>item.className); const rows=classes.map(className=>{const enrolled=data.admissions.filter(item=>(item.placement?.className||item.grade)===className).length;const records=data.attendanceRecords.filter(item=>item.className===className&&(!date||item.date===date));const present=records.filter(item=>item.status==='Present').length;const late=records.filter(item=>item.status==='Late').length;const absent=records.filter(item=>item.status==='Absent').length;const excused=records.filter(item=>item.status==='Excused').length;return {className,enrolled,marked:records.length,present,late,absent,excused,percentage:enrolled?Math.round((present+late)/enrolled*100):null}});return send(response,200,{date,classes:rows}) }
     if (request.method === 'GET' && url.pathname === '/api/teacher/dashboard') {
