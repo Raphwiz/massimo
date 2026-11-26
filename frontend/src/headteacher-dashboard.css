@@ -29,3 +29,69 @@
 @media(max-width:1050px){.headteacher-profile-grid{grid-template-columns:1fr 1fr}.headteacher-learner-rows>button{grid-template-columns:42px 1fr auto}.headteacher-learner-rows button>span:nth-child(3),.headteacher-learner-rows button>span:nth-child(4){display:none}.headteacher-teacher-directory>div:last-child>article{grid-template-columns:42px 1fr 1fr}.headteacher-teacher-directory article>div:nth-child(4){grid-column:2/-1}}
 @media(max-width:680px){.headteacher-kpi-grid,.headteacher-position-grid,.headteacher-profile-grid,.headteacher-staff-allocation-grid{grid-template-columns:1fr}.headteacher-review-list>article{grid-template-columns:1fr}.headteacher-review-list article>div:last-child{justify-content:flex-start}.headteacher-learner-search{align-items:stretch;flex-direction:column}.headteacher-profile-heading{align-items:flex-start;flex-wrap:wrap}.headteacher-profile-heading button{margin-left:auto}.headteacher-learner-rows>button{grid-template-columns:40px 1fr}.headteacher-learner-rows .view-profile{display:none!important}.headteacher-teacher-directory>div:last-child>article{grid-template-columns:40px 1fr}.headteacher-teacher-directory article>div:nth-child(n+3){grid-column:2}}
 @media print{.sidebar,.topbar,.office-page-heading button{display:none!important}.workspace{display:block!important}.content{padding:0!important}.headteacher-report-grid{grid-template-columns:1fr 1fr}}
+
+/* Headteacher workspace consistency audit */
+.headteacher-modern-page,.headteacher-route-page,.headteacher-composite-page{width:100%;min-width:0;box-sizing:border-box}
+.headteacher-route-page>.office-page,.headteacher-route-page>.office-page+.office-page,.headteacher-composite-sections>.office-page{margin:0}
+.headteacher-composite-page{display:grid;gap:18px}
+.headteacher-composite-heading{display:flex;align-items:flex-end;justify-content:space-between;gap:20px;padding:0 0 2px}
+.headteacher-composite-heading h2{margin:5px 0 6px;color:var(--ht-navy,#123668);font-size:clamp(24px,2.2vw,31px);line-height:1.15}
+.headteacher-composite-heading span{display:block;max-width:820px;color:#65758d;font-size:13px;line-height:1.55}
+.headteacher-composite-sections{display:grid;gap:20px;min-width:0}
+.headteacher-composite-sections>.office-page{display:grid;gap:16px;padding:20px;border:1px solid #dbe6f2;border-radius:18px;background:linear-gradient(145deg,#fff,#fbfdff);box-shadow:0 12px 32px rgba(18,54,104,.065)}
+.headteacher-composite-sections>.office-page>.office-page-heading{margin:0;padding:0 0 16px;border-bottom:1px solid #e3ebf4}
+.headteacher-composite-sections>.office-page>.office-page-heading h2{font-size:20px}
+.headteacher-composite-sections>.office-page>.office-page-heading>button,.headteacher-route-page .office-page-heading>button,.headteacher-modern-page .office-page-heading>button{min-height:40px;padding:0 14px;border:1px solid #c4d6ea;border-radius:10px;background:#fff;color:#17549f;box-shadow:0 4px 12px rgba(18,54,104,.06);font-weight:750}
+.headteacher-composite-sections>.office-page>.office-page-heading>button:hover,.headteacher-route-page .office-page-heading>button:hover,.headteacher-modern-page .office-page-heading>button:hover{border-color:#72a2d2;background:#f4f9ff;transform:translateY(-1px)}
+
+.headteacher-route-page{display:grid;gap:18px}
+.headteacher-route-page>.office-page{display:grid;gap:18px}
+.headteacher-route-page>.office-page>.office-page-heading{margin:0}
+.headteacher-route-page .panel,.headteacher-composite-page .panel,.headteacher-modern-page .panel{border:1px solid #dbe6f2;border-radius:16px;box-shadow:0 10px 28px rgba(18,54,104,.055)}
+.headteacher-route-page .panel-heading,.headteacher-composite-page .panel-heading,.headteacher-modern-page .panel-heading{align-items:flex-start;gap:12px;padding:18px 20px}
+.headteacher-route-page .panel-heading h2,.headteacher-composite-page .panel-heading h2,.headteacher-modern-page .panel-heading h2{color:var(--ht-navy,#123668);font-size:16px}
+
+.headteacher-allocation-page .class-setup-grid,.headteacher-allocation-page .academic-setup-grid{gap:16px}
+.headteacher-allocation-page .class-setup-form,.headteacher-allocation-page .class-catalog,.headteacher-allocation-page .academic-form,.headteacher-allocation-page .academic-list{margin:0;overflow:hidden}
+.headteacher-allocation-page .class-setup-form form,.headteacher-allocation-page .academic-form form,.headteacher-staff-oversight-page .teacher-register form,.headteacher-communication-page .headteacher-message-form form{gap:13px;padding:18px 20px}
+.headteacher-allocation-page label,.headteacher-staff-oversight-page label,.headteacher-communication-page label{gap:7px;color:#36506f;font-size:12px;font-weight:750}
+.headteacher-allocation-page input,.headteacher-allocation-page select,.headteacher-staff-oversight-page input,.headteacher-staff-oversight-page select,.headteacher-communication-page input,.headteacher-communication-page select,.headteacher-communication-page textarea{width:100%;min-height:44px;box-sizing:border-box;border:1px solid #cbd9e9;border-radius:10px;background:#fff;padding:0 12px;color:#193b66;font:inherit;outline:none}
+.headteacher-communication-page textarea{min-height:150px;padding:12px;resize:vertical}
+.headteacher-allocation-page input:focus,.headteacher-allocation-page select:focus,.headteacher-staff-oversight-page input:focus,.headteacher-staff-oversight-page select:focus,.headteacher-communication-page input:focus,.headteacher-communication-page select:focus,.headteacher-communication-page textarea:focus{border-color:#3d82cb;box-shadow:0 0 0 3px rgba(31,105,198,.12)}
+.headteacher-allocation-page form>button,.headteacher-staff-oversight-page form>button,.headteacher-communication-page form>button{min-height:44px;border:0;border-radius:10px;background:linear-gradient(135deg,#185cae,#2678cf);color:#fff;font-weight:800;box-shadow:0 7px 16px rgba(31,105,198,.17)}
+.headteacher-allocation-page .class-catalog-list article{grid-template-columns:minmax(220px,1fr) auto auto;gap:14px;padding:15px 20px}
+.headteacher-allocation-page .class-entry-actions{display:flex;gap:7px;justify-content:flex-end}
+.headteacher-allocation-page .class-entry-actions button,.headteacher-allocation-page .form-cancel{min-height:34px;border:1px solid #c8d8ea;border-radius:8px;background:#fff;color:#17549f;padding:0 11px;font-weight:700}
+.headteacher-allocation-page .class-entry-actions .delete-class{color:#a04444;border-color:#e7c6c6}
+
+.headteacher-attendance-list{display:grid}
+.headteacher-attendance-list>article{display:grid;grid-template-columns:minmax(220px,1.4fr) minmax(130px,.7fr) minmax(125px,.65fr) auto;align-items:center;gap:18px;padding:16px 20px;border-top:1px solid #e3ebf4}
+.headteacher-attendance-list>article:hover{background:#f8fbff}
+.headteacher-attendance-list article>div{display:grid;gap:4px}.headteacher-attendance-list strong,.headteacher-attendance-list b{color:var(--ht-navy,#123668)}
+.headteacher-attendance-list span,.headteacher-attendance-list small{color:#718097;font-size:12px}
+.headteacher-attendance-list button{min-height:38px;padding:0 13px;border:1px solid #bfd3e9;border-radius:9px;background:#fff;color:#17549f;font-weight:750;white-space:nowrap}
+.headteacher-attendance-page .report-period{margin:0;padding:18px 20px}.headteacher-attendance-page .report-period form{max-width:320px}
+
+.headteacher-staff-oversight-page{gap:20px}
+.headteacher-staff-oversight-page>.office-page:first-child{padding:20px;border:1px solid #dbe6f2;border-radius:18px;background:#fff;box-shadow:0 12px 32px rgba(18,54,104,.06)}
+.headteacher-staff-oversight-page>.office-page:first-child>.office-page-heading{padding-bottom:16px;border-bottom:1px solid #e3ebf4}
+.headteacher-staff-oversight-page>.office-page:nth-child(2){padding:0}
+.headteacher-staff-oversight-page .teacher-assessment-grid{gap:16px}
+.headteacher-staff-oversight-page .headteacher-review-list{margin:0}
+
+.headteacher-communication-page .headteacher-messages{gap:18px}
+.headteacher-communication-page .headteacher-message-form,.headteacher-communication-page .headteacher-message-log{margin:0;overflow:hidden}
+.headteacher-communication-page .headteacher-message-log>article{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:start;gap:14px;padding:17px 20px;border-top:1px solid #e3ebf4}
+.headteacher-communication-page .headteacher-message-log>article>svg{color:#256cc1}
+.headteacher-communication-page .headteacher-message-log article>div{display:grid;gap:5px}.headteacher-communication-page .headteacher-message-log strong{color:var(--ht-navy,#123668)}
+.headteacher-communication-page .headteacher-message-log small{color:#718097}.headteacher-communication-page .headteacher-message-log p{margin:2px 0;color:#53657d;line-height:1.55}
+.headteacher-communication-page .headteacher-message-log>article>span{padding:5px 9px;border-radius:999px;background:#eaf7ef;color:#21724c;font-size:11px;font-weight:750}
+
+.headteacher-route-page .office-table,.headteacher-composite-page .office-table,.headteacher-modern-page .office-table{width:100%;min-width:680px}
+.headteacher-route-page .academic-list,.headteacher-composite-page .academic-list,.headteacher-modern-page .full-panel{overflow-x:auto}
+.headteacher-route-page .office-table-row,.headteacher-composite-page .office-table-row,.headteacher-modern-page .office-table-row{grid-template-columns:none;grid-auto-flow:column;grid-auto-columns:minmax(145px,1fr);align-items:center}
+.headteacher-route-page .office-table-row.header,.headteacher-composite-page .office-table-row.header,.headteacher-modern-page .office-table-row.header{background:#164878}
+
+@media(max-width:1050px){.headteacher-allocation-page .academic-setup-grid{grid-template-columns:1fr 1fr}.headteacher-attendance-list>article{grid-template-columns:minmax(200px,1fr) 1fr 1fr}.headteacher-attendance-list button{grid-column:1/-1;justify-self:start}}
+@media(max-width:760px){.headteacher-composite-sections>.office-page,.headteacher-staff-oversight-page>.office-page:first-child{padding:16px;border-radius:14px}.headteacher-composite-sections>.office-page>.office-page-heading,.headteacher-route-page .office-page-heading{align-items:flex-start;flex-direction:column}.headteacher-composite-sections>.office-page>.office-page-heading>button,.headteacher-route-page .office-page-heading>button{width:100%;justify-content:center}.headteacher-allocation-page .academic-setup-grid,.headteacher-allocation-page .class-setup-grid,.headteacher-staff-oversight-page .teacher-assessment-grid{grid-template-columns:1fr}.headteacher-allocation-page .class-catalog-list article{grid-template-columns:1fr auto}.headteacher-allocation-page .class-entry-actions{grid-column:1/-1;justify-content:flex-start}.headteacher-attendance-list>article{grid-template-columns:1fr 1fr}.headteacher-attendance-list>article>div:first-child{grid-column:1/-1}.headteacher-attendance-list button{width:100%}.headteacher-communication-page .headteacher-message-log>article{grid-template-columns:auto 1fr}.headteacher-communication-page .headteacher-message-log>article>span{grid-column:2;justify-self:start}}
+@media(max-width:520px){.headteacher-composite-heading h2{font-size:24px}.headteacher-composite-sections>.office-page{padding:14px}.headteacher-attendance-list>article{grid-template-columns:1fr;padding:15px}.headteacher-attendance-list>article>div:first-child,.headteacher-attendance-list button{grid-column:auto}.headteacher-allocation-page .class-catalog-list article{grid-template-columns:1fr}.headteacher-allocation-page .class-catalog-list article>span{justify-self:start}.headteacher-communication-page .headteacher-message-log>article{grid-template-columns:1fr}.headteacher-communication-page .headteacher-message-log>article>span{grid-column:auto}.headteacher-communication-page .headteacher-message-log>article>svg{display:none}}
