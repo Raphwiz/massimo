@@ -282,7 +282,7 @@ function routeRoles(method, path) {
   if (path === '/api/sms' || path === '/api/sms/wallet' || path === '/api/sms/topups') return ['secretary']
   if (path === '/api/admissions') return method === 'GET' ? ['secretary', 'headteacher', 'teacher'] : ['secretary']
   if (path.startsWith('/api/admissions/')) return ['secretary']
-  if (path.startsWith('/api/learner-import/')) return ['system-admin']
+  if (path.startsWith('/api/learner-import/') || path.startsWith('/api/teacher-import/')) return ['system-admin']
   if (path === '/api/calendar-events') return ['secretary']
   if (path === '/api/school-classes') return method === 'GET' ? ['headteacher', 'secretary', 'teacher'] : ['headteacher', 'secretary']
   if (path.startsWith('/api/school-classes/')) return method === 'PUT' ? ['headteacher', 'secretary'] : ['headteacher']
@@ -328,7 +328,7 @@ function text(value, maxLength) {
 
 function normalisePhone(value) {
   const digits = String(value || '').replace(/\D/g, '')
-  return digits.replace(/^0(?=7\d{8}$)/, '254')
+  return digits.replace(/^0(?=[17]\d{8}$)/, '254')
 }
 
 function smsSegments(message) {
@@ -409,7 +409,8 @@ function portalAccountForClient(account) {
 }
 
 function accountIdentifier(input, role) {
-  return role === 'parent' ? normalisePhone(input) : text(input, 120).toLowerCase()
+  const raw = text(input, 120)
+  return (role === 'parent' || (role === 'teacher' && !raw.includes('@'))) ? normalisePhone(raw) : raw.toLowerCase()
 }
 
 function activationMessage(account, code, expiresAt) {
@@ -924,6 +925,36 @@ async function parseLearnerWorkbook(encoded,data) { const bytes=Buffer.from(Stri
   let section=''; const rows=[]; sheet.eachRow((row,rowNumber)=>{ const cells=row.values.slice(1); const [admission,serial,name,dob,father,fatherPhone,mother,motherPhone]=cells; const nameText=String(name||'').trim(); const header=String(admission||'').trim().toUpperCase()==='ADM. NO'&&nameText.toUpperCase()==='NAME'; const sectionHeader=/^(PP1|PP2|GRADE\s+(ONE|TWO|THREE|FOUR|FIVE|SIX|SEVEN|EIGHT|NINE))$/i.test(nameText)&&(!admission&&!serial||String(dob||'').trim().toUpperCase()==='DOB'); if (sectionHeader) { section=importGrade(nameText); return } if (header||!nameText||!section) return; const guardians=[{name:String(father||'').trim(),phone:importPhone(fatherPhone),relationship:'Father'},{name:String(mother||'').trim(),phone:importPhone(motherPhone),relationship:'Mother / guardian'}].filter(item=>item.name||item.phone); const primary=guardians.find(item=>item.phone)||guardians[0]||{name:'Guardian contact pending',phone:'',relationship:'Guardian'}; rows.push({row:rowNumber,learnerName:nameText,grade:section,admissionNumber:String(admission||'').trim(),dateOfBirth:importDate(dob),guardians,guardianName:primary.name||'Guardian contact pending',guardianPhone:primary.phone,relationship:primary.relationship,issues:[]}) })
   const seen=new Map(); rows.forEach(item=>{if(item.admissionNumber) seen.set(item.admissionNumber,(seen.get(item.admissionNumber)||0)+1)}); const existing=new Set(data.admissions.map(item=>String(item.admissionNumber||''))); rows.forEach(item=>{if(!item.admissionNumber)item.issues.push('Admission number missing — system will issue one'); if(item.admissionNumber&&seen.get(item.admissionNumber)>1)item.issues.push('Duplicate admission number — repeated record will receive R'); if(item.admissionNumber&&existing.has(item.admissionNumber))item.issues.push('Admission number already exists — repeated record will receive R'); if(!item.dateOfBirth&&String(item.dateOfBirth||'')==='')item.issues.push('Date of birth missing or needs review'); if(!item.guardianPhone)item.issues.push('No valid guardian phone')}); return rows }
 
+async function parseTeacherWorkbook(encoded, data) {
+  const bytes = Buffer.from(String(encoded || ''), 'base64')
+  if (!bytes.length || bytes.length > 4 * 1024 * 1024) throw new Error('Choose an Excel workbook smaller than 4 MB.')
+  const workbook = new ExcelJS.Workbook()
+  await workbook.xlsx.load(bytes)
+  const sheet = workbook.worksheets[0]
+  if (!sheet) throw new Error('The workbook has no first worksheet.')
+  const rows = []
+  const seenPhones = new Set()
+  const existingIdentifiers = new Set(data.accounts.map(item => String(item.identifier || '').toLowerCase()))
+  const existingStaffPhones = new Set(data.staff.map(item => normalisePhone(item.phone)).filter(Boolean))
+  sheet.eachRow((row, rowNumber) => {
+    if (rowNumber === 1) return
+    const cells = row.values.slice(1)
+    const name = text(cells[1], 100)
+    const phone = normalisePhone(cells[2])
+    if (!name && !phone) return
+    const issues = []
+    const validPhone = /^254[17]\d{8}$/.test(phone)
+    if (!name) issues.push('Teacher name is missing')
+    if (!validPhone) issues.push('Phone number is not a valid Kenyan mobile number')
+    if (validPhone && seenPhones.has(phone)) issues.push('Duplicate phone number in this workbook')
+    if (validPhone && existingIdentifiers.has(phone.toLowerCase())) issues.push('Portal account already exists')
+    if (validPhone && existingStaffPhones.has(phone)) issues.push('Staff profile already exists')
+    if (validPhone) seenPhones.add(phone)
+    rows.push({ row: rowNumber, name, phone, role: 'teacher', title: 'Teacher', issues, ready: Boolean(name && validPhone && !issues.some(issue => issue.includes('Duplicate') || issue.includes('already exists'))) })
+  })
+  return rows
+}
+
 const server = createServer(async (request, response) => {
   applySecurityHeaders(request, response)
   if (request.method === 'OPTIONS') {
@@ -1145,13 +1176,14 @@ const server = createServer(async (request, response) => {
       const name = text(input.name, 100)
       const identifier = accountIdentifier(input.identifier, role)
       const title = text(input.title, 100)
-      if (!allowedRoles.has(role) || (request.account.role !== 'system-admin' && role === 'headteacher') || !name || !identifier || (role === 'parent' && !/^2547\d{8}$/.test(identifier)) || (role !== 'parent' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(identifier))) return send(response, 400, { error: request.account.role !== 'system-admin' && role === 'headteacher' ? 'Only the system administrator can create headteacher accounts.' : 'Enter a name and a valid work email or Kenyan parent phone number.' })
+      const staffIdentifierValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(identifier) || (role === 'teacher' && /^254[17]\d{8}$/.test(identifier))
+      if (!allowedRoles.has(role) || (request.account.role !== 'system-admin' && role === 'headteacher') || !name || !identifier || (role === 'parent' && !/^254[17]\d{8}$/.test(identifier)) || (role !== 'parent' && !staffIdentifierValid)) return send(response, 400, { error: request.account.role !== 'system-admin' && role === 'headteacher' ? 'Only the system administrator can create headteacher accounts.' : 'Enter a name and a valid work email or Kenyan mobile number.' })
       if (data.accounts.some(account => account.identifier === identifier)) return send(response, 400, { error: 'An account already exists with those sign-in details.' })
       if (role === 'parent' && !data.admissions.some(admission => normalisePhone(admission.guardianPhone) === identifier)) return send(response, 400, { error: 'Create or update the learner admission first so this parent phone is linked to a learner.' })
       const baseAccount = { id: `account-${Date.now()}-${randomBytes(4).toString('hex')}`, identifier, role, name, title: title || (role === 'parent' ? 'Parent / Guardian' : role), parentPhone: role === 'parent' ? identifier : '', active: true, createdAt: new Date().toISOString() }
       const activation = issueActivation(baseAccount)
       data.accounts.push(activation.account)
-      if (role === 'teacher' && !data.staff.some(item => String(item.email || '').trim().toLowerCase() === identifier.toLowerCase())) data.staff.push({ id: `staff-${Date.now()}-${randomBytes(3).toString('hex')}`, fullName: name, role: 'Teacher', staffType: 'Teaching', phone: '', email: identifier, employmentStatus: 'Active', createdAt: new Date().toISOString(), createdBy: request.account.name })
+      if (role === 'teacher' && !data.staff.some(item => [String(item.email || '').trim().toLowerCase(), normalisePhone(item.phone)].includes(identifier.toLowerCase()))) data.staff.push({ id: `staff-${Date.now()}-${randomBytes(3).toString('hex')}`, fullName: name, role: 'Teacher', staffType: 'Teaching', phone: /^254[17]\d{8}$/.test(identifier) ? identifier : '', email: identifier.includes('@') ? identifier : '', employmentStatus: 'Active', createdAt: new Date().toISOString(), createdBy: request.account.name })
       await saveData(data)
       return send(response, 201, { account: portalAccountForClient(activation.account), activation: { code: activation.code, expiresAt: activation.account.activationExpiresAt, message: activationMessage(activation.account, activation.code, activation.account.activationExpiresAt) } })
     }
@@ -2023,6 +2055,28 @@ const server = createServer(async (request, response) => {
 
     if (request.method === 'POST' && url.pathname === '/api/learner-import/preview') { const input=await body(request); const rows=await parseLearnerWorkbook(input.fileBase64,data); return send(response,200,{rows,summary:{total:rows.length,ready:rows.length,review:rows.filter(row=>row.issues.some(issue=>issue.includes('Duplicate')||issue.includes('already exists'))).length}}) }
     if (request.method === 'POST' && url.pathname === '/api/learner-import/commit') { const input=await body(request); const rows=Array.isArray(input.rows)?input.rows:[]; if(!rows.length||rows.length>1200)return send(response,400,{error:'No valid learner import rows were supplied.'}); const createdAt=new Date().toISOString(); const imported=[]; for(const row of rows){const name=text(row.learnerName,100),grade=text(row.grade,20);if(!name||!grade||data.admissions.some(item=>item.learnerName===name&&item.grade===grade))continue;let number=text(row.admissionNumber,40);if(!number)number=nextAdmissionNumber(createdAt,data.admissions);else if(data.admissions.some(item=>item.admissionNumber===number))number=repeatedAdmissionNumber(number,data.admissions);const guardians=Array.isArray(row.guardians)?row.guardians.slice(0,2).map(item=>({name:text(item.name,100),phone:normalisePhone(item.phone),relationship:text(item.relationship,40)})):[];const primary=guardians.find(item=>/^2547\d{8}$/.test(item.phone))||guardians[0]||{name:'Guardian contact pending',phone:'',relationship:'Guardian'};const application={id:`admission-${Date.now()}-${imported.length}`,admissionNumber:number,sourceAdmissionNumber:text(row.admissionNumber,40),learnerName:name,grade,guardianName:primary.name||'Guardian contact pending',guardianPhone:primary.phone||'',relationship:primary.relationship||'Guardian',guardians,dateOfBirth:text(row.dateOfBirth,10),medicalNotes:'',birthCertificateProvided:false,status:'Imported — placement pending',createdAt,importedAt:createdAt};data.admissions.push(application);imported.push(application)} await saveData(data); return send(response,201,{imported:imported.length,skipped:rows.length-imported.length}) }
+    if (request.method === 'POST' && url.pathname === '/api/teacher-import/preview') { const input=await body(request); const rows=await parseTeacherWorkbook(input.fileBase64,data); return send(response,200,{rows,summary:{total:rows.length,ready:rows.filter(row=>row.ready).length,review:rows.filter(row=>!row.ready).length}}) }
+    if (request.method === 'POST' && url.pathname === '/api/teacher-import/commit') {
+      const input = await body(request)
+      const rows = Array.isArray(input.rows) ? input.rows : []
+      if (!rows.length || rows.length > 200) return send(response, 400, { error: 'No valid teacher import rows were supplied.' })
+      const activations = []
+      let skipped = 0
+      for (const row of rows) {
+        const name = text(row.name, 100)
+        const identifier = normalisePhone(row.phone)
+        if (!name || !/^254[17]\d{8}$/.test(identifier) || data.accounts.some(item => item.identifier === identifier) || data.staff.some(item => normalisePhone(item.phone) === identifier)) { skipped++; continue }
+        const createdAt = new Date().toISOString()
+        const baseAccount = { id:`account-${Date.now()}-${randomBytes(4).toString('hex')}`, identifier, role:'teacher', name, title:'Teacher', parentPhone:'', active:true, createdAt }
+        const activation = issueActivation(baseAccount)
+        data.accounts.push(activation.account)
+        data.staff.push({ id:`staff-${Date.now()}-${randomBytes(3).toString('hex')}`, fullName:name, role:'Teacher', staffType:'Teaching', phone:identifier, email:'', employmentStatus:'Active', createdAt, createdBy:request.account.name })
+        addAccountAudit(data, 'Teacher account imported', request.account, `${name} · ${identifier}`)
+        activations.push({ name, identifier, code:activation.code, expiresAt:activation.account.activationExpiresAt })
+      }
+      await saveData(data)
+      return send(response, 201, { imported: activations.length, skipped, activations })
+    }
     if (request.method === 'POST' && url.pathname === '/api/admissions') {
       const input = await body(request)
       const createdAt = new Date().toISOString()
