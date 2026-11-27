@@ -41,6 +41,7 @@
 .headteacher-grade-groups .headteacher-learner-rows>button:first-child{border-top:0}
 .headteacher-staff-allocation-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:18px}.headteacher-staff-allocation-grid>.panel{margin:0;box-shadow:0 12px 30px rgba(18,54,104,.07)}
 .headteacher-teaching-staff .headteacher-staff-allocation-grid>.academic-form{overflow:visible;border-color:#cfdeed;background:linear-gradient(155deg,#fff,#fbfdff)}
+.headteacher-teaching-staff .class-filtered-subject-form{display:none}.headteacher-teaching-staff .headteacher-staff-allocation-grid:has(.class-filtered-subject-form){grid-template-columns:minmax(0,720px)}
 .headteacher-teaching-staff .academic-form .panel-heading{padding:19px 21px;border-bottom:1px solid #e2ebf4;background:linear-gradient(90deg,#f7fbff,#fff);border-radius:16px 16px 0 0}
 .headteacher-teaching-staff .academic-form .panel-heading h2{font-size:17px}.headteacher-teaching-staff .academic-form .panel-heading span{display:block;margin-top:4px;color:#708198;font-size:12px}
 .headteacher-teaching-staff .academic-form form,.headteacher-staff-oversight-page .teacher-register form{display:grid;gap:15px;padding:20px 21px}
