@@ -595,7 +595,8 @@ function addFinanceAudit(data, request, action, recordType, recordId, detail = '
 function addAccountAudit(data, action, account, detail = '') { data.accountAudit ??= []; data.accountAudit.unshift({ id:`audit-${Date.now()}-${Math.random().toString(36).slice(2,7)}`, action, accountId:account?.id || '', accountName:account?.name || '', by:account?.name || 'System', detail, createdAt:new Date().toISOString() }) }
 
 const money = value => `KES ${Number(value || 0).toLocaleString('en-KE')}`
-const receiptVoteHeads = new Set(['Tuition / School fees','Boarding fees','Meals / Lunch programme','Transport','Examinations / Assessments','Activity, Sports & Trips','Development / PTA projects','ICT / Computer','Books, Stationery & Learning materials','Medical / Insurance','Uniform','Damages / Lost items','Other approved charge'])
+const receiptVoteHeadList = ['Tuition / School fees','Boarding fees','Meals / Lunch programme','Transport','Examinations / Assessments','Activity, Sports & Trips','Development / PTA projects','Books, Stationery & Learning materials','Medical / Insurance','Uniform','Damages / Lost items']
+const receiptVoteHeads = new Set(receiptVoteHeadList)
 const safePdfName = value => String(value || 'learner').replace(/[^a-z0-9_-]+/gi, '_').replace(/^_+|_+$/g, '')
 async function createClassListPdf(data, schoolClass) {
   const learners = data.admissions
@@ -838,33 +839,39 @@ async function createFeeStatementPdf(data, learner, servedBy = 'School office') 
 async function createReceiptPdf(receipt) {
   const chunks = []; const document = new PDFDocument({ size: 'A5', margin: 36 }); document.on('data', chunk => chunks.push(chunk))
   const finished = new Promise((resolve, reject) => { document.on('end', () => resolve(Buffer.concat(chunks))); document.on('error', reject) })
-  try { document.image(await readFile(crestPath), 36, 28, { fit: [44, 44] }) } catch { /* The receipt remains valid if the crest is unavailable. */ }
-  document.fillColor('#173662').font('Helvetica-Bold').fontSize(13).text("ST. DOROTHY'S SCHOOL MASSIMO", 89, 34)
-  document.font('Helvetica').fontSize(6.8).fillColor('#536B84').text('P.O. Box 36-60607, Mikinduri, Meru, Kenya | +254 722 841 569', 89, 52).text('stdorothysschoolmassimo@gmail.com | We lead by example', 89, 63)
-  document.moveTo(36, 84).lineTo(384, 84).stroke('#1D5EAA')
-  document.fillColor('#173662').font('Helvetica-Bold').fontSize(14).text('PAYMENT RECEIPT', 36, 99)
-  document.font('Helvetica').fontSize(7.2).fillColor('#536B84').text(`Receipt No: ${receipt.receiptNumber || 'Pending'} | Generated: ${new Intl.DateTimeFormat('en-KE', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Africa/Nairobi' }).format(new Date(receipt.issuedAt || Date.now()))}`, 36, 119, { width: 348 })
+  try { document.image(await readFile(crestPath), 36, 22, { fit: [40, 40] }) } catch { /* The receipt remains valid if the crest is unavailable. */ }
+  document.fillColor('#173662').font('Helvetica-Bold').fontSize(12.5).text("ST. DOROTHY'S SCHOOL MASSIMO", 84, 27)
+  document.font('Helvetica').fontSize(6.6).fillColor('#536B84').text('P.O. Box 36-60607, Mikinduri, Meru, Kenya | +254 722 841 569', 84, 44).text('stdorothysschoolmassimo@gmail.com | We lead by example', 84, 54)
+  document.moveTo(36, 70).lineTo(384, 70).stroke('#1D5EAA')
+  document.fillColor('#173662').font('Helvetica-Bold').fontSize(13).text('PAYMENT RECEIPT', 36, 82)
+  document.font('Helvetica').fontSize(6.9).fillColor('#536B84').text(`Receipt No: ${receipt.receiptNumber || 'Pending'} | Generated: ${new Intl.DateTimeFormat('en-KE', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Africa/Nairobi' }).format(new Date(receipt.issuedAt || Date.now()))}`, 36, 99, { width: 348 })
   const heading = (label, y) => document.fillColor('#173662').font('Helvetica-Bold').fontSize(9).text(label, 36, y)
   const detail = (label, value, y, x = 36) => { document.fillColor('#536B84').font('Helvetica-Bold').fontSize(7.2).text(label, x, y); document.fillColor('#173662').font('Helvetica').fontSize(8.2).text(value || 'Not recorded', x, y + 10, { width: 154 }) }
-  heading('Learner and payment', 151)
-  detail('LEARNER', receipt.learnerName, 168)
-  detail('ADMISSION NUMBER', receipt.admissionNumber, 168, 210)
-  detail('GRADE / CLASS', receipt.className, 197)
-  detail('PAYMENT DATE', receipt.paymentDate || String(receipt.issuedAt || '').slice(0, 10), 197, 210)
-  heading('Account summary', 232)
+  heading('Learner and payment', 122)
+  detail('LEARNER', receipt.learnerName, 137)
+  detail('ADMISSION NUMBER', receipt.admissionNumber, 137, 210)
+  detail('GRADE / CLASS', receipt.className, 161)
+  detail('PAYMENT DATE', receipt.paymentDate || String(receipt.issuedAt || '').slice(0, 10), 161, 210)
+  heading('Account summary', 193)
   const balanceText = value => value === null || value === undefined ? 'Not available' : money(value)
-  document.rect(36, 249, 348, 22).fill('#F3F6F9')
-  document.fillColor('#173662').font('Helvetica-Bold').fontSize(8.5).text('Balance before payment', 46, 256).text(balanceText(receipt.balanceBeforePayment), 254, 256, { width: 120, align: 'right' })
-  document.rect(36, 274, 348, 22).fill('#EEF6FF')
-  document.fillColor('#173662').font('Helvetica-Bold').fontSize(8.5).text('Amount received', 46, 281).text(money(receipt.amount), 254, 281, { width: 120, align: 'right' })
-  document.rect(36, 299, 348, 22).fill('#E6F4E9')
-  document.fillColor('#1F7044').font('Helvetica-Bold').fontSize(8.5).text('Remaining balance after payment', 46, 306).text(balanceText(receipt.remainingBalance), 254, 306, { width: 120, align: 'right' })
-  heading('Payment allocation', 338)
-  document.fillColor('#536B84').font('Helvetica-Bold').fontSize(7).text('VOTE HEAD / PARTICULAR', 36, 356).text('AMOUNT', 286, 356, { width: 98, align: 'right' })
-  document.moveTo(36, 367).lineTo(384, 367).stroke('#B8C9DA')
-  let allocationY = 374
-  const allocations = Array.isArray(receipt.allocations) && receipt.allocations.length ? receipt.allocations : [{ voteHead:'School fees', amount:receipt.amount }]
-  allocations.forEach(item => { const label=item.note?`${item.voteHead} — ${item.note}`:item.voteHead; document.fillColor('#173662').font('Helvetica').fontSize(7.6).text(label, 36, allocationY, { width: 238 }).text(money(item.amount), 286, allocationY, { width: 98, align:'right' }); allocationY += 14 })
+  document.rect(36, 208, 348, 18).fill('#F3F6F9')
+  document.fillColor('#173662').font('Helvetica-Bold').fontSize(7.8).text('Balance before payment', 44, 213).text(balanceText(receipt.balanceBeforePayment), 254, 213, { width: 122, align: 'right' })
+  document.rect(36, 228, 348, 18).fill('#EEF6FF')
+  document.fillColor('#173662').font('Helvetica-Bold').fontSize(7.8).text('Amount received', 44, 233).text(money(receipt.amount), 254, 233, { width: 122, align: 'right' })
+  document.rect(36, 248, 348, 18).fill('#E6F4E9')
+  document.fillColor('#1F7044').font('Helvetica-Bold').fontSize(7.8).text('Remaining balance after payment', 44, 253).text(balanceText(receipt.remainingBalance), 254, 253, { width: 122, align: 'right' })
+  heading('Payment allocation', 278)
+  document.fillColor('#536B84').font('Helvetica-Bold').fontSize(6.8).text('VOTE HEAD / PARTICULAR', 36, 293).text('AMOUNT', 286, 293, { width: 98, align: 'right' })
+  document.moveTo(36, 303).lineTo(384, 303).stroke('#B8C9DA')
+  let allocationY = 308
+  const savedAllocations = Array.isArray(receipt.allocations) ? receipt.allocations : []
+  const amountFor = voteHead => savedAllocations.filter(item => item.voteHead === voteHead || (voteHead === 'Tuition / School fees' && ['School fees','Other approved charge'].includes(item.voteHead)) || (voteHead === 'Books, Stationery & Learning materials' && item.voteHead === 'ICT / Computer')).reduce((total, item) => total + Number(item.amount || 0), 0)
+  const allocationRows = ['Arrears', ...receiptVoteHeadList].map(voteHead => ({ voteHead, amount: amountFor(voteHead) }))
+  allocationRows.forEach((item, index) => {
+    if (index % 2 === 0) document.rect(36, allocationY - 2, 348, 10).fill('#F8FAFC')
+    document.fillColor(item.amount > 0 ? '#173662' : '#536B84').font(item.amount > 0 ? 'Helvetica-Bold' : 'Helvetica').fontSize(6.7).text(item.voteHead, 40, allocationY, { width: 238 }).text(money(item.amount), 286, allocationY, { width: 94, align:'right' })
+    allocationY += 10
+  })
   document.moveTo(36, allocationY + 1).lineTo(384, allocationY + 1).stroke('#D8A20C')
   document.font('Helvetica-Bold').fontSize(8).text('TOTAL', 36, allocationY + 8).text(money(receipt.amount), 286, allocationY + 8, { width:98, align:'right' })
   const paymentY = allocationY + 34
