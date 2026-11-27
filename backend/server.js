@@ -282,6 +282,7 @@ function routeRoles(method, path) {
   if (path === '/api/sms' || path === '/api/sms/wallet' || path === '/api/sms/topups') return ['secretary']
   if (path === '/api/admissions') return method === 'GET' ? ['secretary', 'headteacher', 'teacher'] : ['secretary']
   if (path.startsWith('/api/admissions/')) return ['secretary']
+  if (path === '/api/admission-interviews' || path.startsWith('/api/admission-interviews/')) return ['secretary', 'headteacher']
   if (path.startsWith('/api/learner-import/') || path.startsWith('/api/teacher-import/')) return ['system-admin']
   if (path === '/api/calendar-events') return ['secretary']
   if (path === '/api/school-classes') return method === 'GET' ? ['headteacher', 'secretary', 'teacher'] : ['headteacher', 'secretary']
@@ -1022,6 +1023,7 @@ const server = createServer(async (request, response) => {
     data.staffAttendance ??= []
     data.promotions ??= []
     data.receipts ??= []
+    data.admissionInterviews ??= []
     data.smsMessages ??= []
     data.smsWallet ??= { balance: 0, pricePerCreditKes: 0.8, senderId: '' }
     data.smsWallet.pricePerCreditKes = 0.8
@@ -2103,6 +2105,65 @@ const server = createServer(async (request, response) => {
       }
       await saveData(data)
       return send(response, 201, { imported: activations.length, skipped, activations })
+    }
+    if (request.method === 'GET' && url.pathname === '/api/admission-interviews') {
+      return send(response, 200, data.admissionInterviews.slice().sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt))))
+    }
+    if (request.method === 'POST' && url.pathname === '/api/admission-interviews') {
+      if (requestedSessionRole(request) !== 'secretary') return send(response, 403, { error: 'Only the school office can register interview candidates.' })
+      const input = await body(request)
+      const grade = text(input.grade, 20)
+      const learnerName = text(input.learnerName, 100)
+      const guardianName = text(input.guardianName, 100)
+      const guardianPhone = normalisePhone(input.guardianPhone)
+      const interviewDate = text(input.interviewDate, 10)
+      if (!learnerName || !grade || !guardianName || !/^254[17]\d{8}$/.test(guardianPhone) || !interviewDate) return send(response, 400, { error: 'Enter the learner, grade, interview date, and a valid Kenyan guardian phone number.' })
+      const year = new Date().getFullYear()
+      const sequence = data.admissionInterviews.filter(item => String(item.createdAt || '').startsWith(String(year))).length + 1
+      const feeAmount = /^baby class$/i.test(grade) ? 500 : 1000
+      const candidate = {
+        id:`interview-${Date.now()}`,
+        candidateNumber:`SD/INT/${year}/${String(sequence).padStart(4, '0')}`,
+        learnerName, grade, dateOfBirth:text(input.dateOfBirth, 10), gender:text(input.gender, 20), formerSchool:text(input.formerSchool, 100),
+        guardianName, guardianPhone, interviewDate, feeAmount, feeStatus:'Unpaid', status:'Awaiting payment',
+        paymentMethod:'', paymentReference:'', receiptNumber:'', paidAt:null, score:null, remarks:'', decision:'Pending', decisionBy:'', decisionAt:null,
+        admissionId:'', createdAt:new Date().toISOString(), createdBy:request.account.name
+      }
+      data.admissionInterviews.unshift(candidate)
+      await saveData(data)
+      return send(response, 201, candidate)
+    }
+    if (request.method === 'PUT' && url.pathname.startsWith('/api/admission-interviews/')) {
+      const id = decodeURIComponent(url.pathname.slice('/api/admission-interviews/'.length))
+      const candidate = data.admissionInterviews.find(item => item.id === id)
+      if (!candidate) return send(response, 404, { error: 'Interview candidate not found.' })
+      const input = await body(request)
+      const action = text(input.action, 30)
+      if (action === 'confirm-payment') {
+        if (requestedSessionRole(request) !== 'secretary') return send(response, 403, { error: 'Only the school office can confirm interview payments.' })
+        if (candidate.feeStatus === 'Paid') return send(response, 400, { error: 'This interview fee has already been confirmed.' })
+        const amount = Number(input.amount), paymentReference = text(input.paymentReference, 80), paymentMethod = text(input.paymentMethod, 30)
+        if (amount !== Number(candidate.feeAmount) || !paymentMethod || !paymentReference) return send(response, 400, { error: `Confirm the exact non-refundable interview fee of ${money(candidate.feeAmount)} and enter its payment reference.` })
+        if (data.admissionInterviews.some(item => item.id !== candidate.id && String(item.paymentReference || '').toLowerCase() === paymentReference.toLowerCase())) return send(response, 409, { error: 'That payment reference has already been used.' })
+        const year = new Date().getFullYear(), paidCount = data.admissionInterviews.filter(item => item.feeStatus === 'Paid').length + 1
+        Object.assign(candidate, { feeStatus:'Paid', status:'Scheduled', paymentMethod, paymentReference, receiptNumber:`SD/INT-RCT/${year}/${String(paidCount).padStart(4, '0')}`, paidAt:new Date().toISOString(), paymentConfirmedBy:request.account.name })
+      } else if (action === 'record-result') {
+        if (requestedSessionRole(request) !== 'headteacher') return send(response, 403, { error: 'Only the Headteacher can record interview results.' })
+        if (candidate.feeStatus !== 'Paid') return send(response, 400, { error: 'Confirm the interview fee before recording an interview result.' })
+        const score = Number(input.score), decision = text(input.decision, 20)
+        if (!Number.isFinite(score) || score < 0 || score > 100 || !['Passed', 'Review', 'Unsuccessful'].includes(decision)) return send(response, 400, { error: 'Enter a score from 0 to 100 and choose a valid interview decision.' })
+        Object.assign(candidate, { score, remarks:text(input.remarks, 500), decision, status:decision, decisionBy:request.account.name, decisionAt:new Date().toISOString() })
+      } else if (action === 'admit') {
+        if (requestedSessionRole(request) !== 'secretary') return send(response, 403, { error: 'Only the school office can transfer a successful candidate to admissions.' })
+        if (candidate.decision !== 'Passed') return send(response, 400, { error: 'Only a candidate marked Passed can proceed to admission.' })
+        if (candidate.admissionId) return send(response, 400, { error: 'This candidate has already been transferred to admissions.' })
+        const createdAt = new Date().toISOString()
+        const application = { id:`admission-${Date.now()}`, admissionNumber:nextAdmissionNumber(createdAt, data.admissions), learnerName:candidate.learnerName, grade:candidate.grade, residency:'Day scholar', admissionFee:candidate.feeAmount, admissionFeeStatus:'Paid', guardianName:candidate.guardianName, guardianPhone:candidate.guardianPhone, relationship:'Parent / guardian', guardians:[{ name:candidate.guardianName, phone:candidate.guardianPhone, relationship:'Parent / guardian' }], formerSchool:candidate.formerSchool, dateOfBirth:candidate.dateOfBirth, gender:candidate.gender, medicalNotes:'', birthCertificateProvided:false, status:'Application received', interviewCandidateNumber:candidate.candidateNumber, createdAt }
+        data.admissions.unshift(application)
+        Object.assign(candidate, { status:'Admitted', admissionId:application.id, admissionNumber:application.admissionNumber, admittedAt:createdAt, admittedBy:request.account.name })
+      } else return send(response, 400, { error: 'Choose a valid interview action.' })
+      await saveData(data)
+      return send(response, 200, candidate)
     }
     if (request.method === 'POST' && url.pathname === '/api/admissions') {
       const input = await body(request)
