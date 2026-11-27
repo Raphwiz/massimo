@@ -292,7 +292,7 @@ function routeRoles(method, path) {
   if (path === '/api/staff') return ['headteacher', 'secretary']
   if (path === '/api/staff-attendance' || path === '/api/promotions') return ['headteacher']
   if (path === '/api/academics') return ['headteacher', 'teacher']
-  if (['/api/subjects', '/api/teacher-assignments', '/api/timetable'].includes(path)) return ['headteacher']
+  if (path === '/api/subjects' || path.startsWith('/api/subjects/') || ['/api/teacher-assignments', '/api/timetable'].includes(path)) return ['headteacher']
   if (path === '/api/lesson-plans') return ['headteacher', 'teacher']
   if (path.startsWith('/api/lesson-plans/')) return ['headteacher', 'teacher']
   if (path === '/api/leave-requests') return ['headteacher', 'teacher']
@@ -526,6 +526,13 @@ function nextReceiptNumber(issuedAt, receipts) {
 
 const defaultClassCapacity = 35
 const schoolGrades = new Set(['Pre-Primary', 'Baby Class', 'PP1', 'PP2', ...Array.from({ length: 9 }, (_, index) => `Grade ${index + 1}`)])
+const cbcSubjectCatalogVersion = 'KICD-2026-1'
+const cbcSubjectCatalog = [
+  ...['PP1', 'PP2'].flatMap(grade => ['Language Activities', 'Mathematical Activities', 'Environmental Activities', 'Creative Arts', 'Christian Religious Education Activities'].map(name => ({ grade, name }))),
+  ...['Grade 1', 'Grade 2', 'Grade 3'].flatMap(grade => ['English', 'Kiswahili', 'Mathematical Activities', 'Environmental Activities', 'Creative Activities', 'Christian Religious Education', 'Indigenous Language'].map(name => ({ grade, name, optional: name === 'Indigenous Language' }))),
+  ...['Grade 4', 'Grade 5', 'Grade 6'].flatMap(grade => ['English', 'Kiswahili', 'Mathematics', 'Science and Technology', 'Agriculture and Nutrition', 'Social Studies', 'Creative Activities', 'Christian Religious Education', 'Indigenous Language', 'Foreign Language'].map(name => ({ grade, name, optional: ['Indigenous Language', 'Foreign Language'].includes(name) }))),
+  ...['Grade 7', 'Grade 8', 'Grade 9'].flatMap(grade => ['English', 'Kiswahili', 'Mathematics', 'Integrated Science', 'Social Studies', 'Agriculture', 'Pre-Technical Studies', 'Creative Arts and Sports', 'Christian Religious Education', 'Indigenous Language', 'Foreign Language'].map(name => ({ grade, name, optional: ['Indigenous Language', 'Foreign Language'].includes(name) })))
+]
 const learnerResidencies = new Set(['Day scholar', 'Boarder'])
 const classStatuses = new Set(['Active', 'Inactive'])
 const placementDecisions = new Set(['Pending headteacher approval', 'Confirmed', 'Waitlisted'])
@@ -933,6 +940,16 @@ const server = createServer(async (request, response) => {
     data.classPlacements ??= []
     data.staff ??= []
     data.subjects ??= []
+    const cbcSubjectsAdded = data.subjectCatalogVersion !== cbcSubjectCatalogVersion
+    if (cbcSubjectsAdded) {
+      const existingSubjects = new Set(data.subjects.map(item => `${String(item.grade || '').toLowerCase()}|${String(item.name || '').toLowerCase()}`))
+      const seededAt = new Date().toISOString()
+      cbcSubjectCatalog.forEach((subject, index) => {
+        const key = `${subject.grade.toLowerCase()}|${subject.name.toLowerCase()}`
+        if (!existingSubjects.has(key)) data.subjects.push({ id: `cbc-subject-${String(index + 1).padStart(3, '0')}`, name: subject.name, grade: subject.grade, status: subject.optional ? 'Inactive' : 'Active', optional: Boolean(subject.optional), source: 'KICD rationalised curriculum', createdAt: seededAt, updatedAt: seededAt })
+      })
+      data.subjectCatalogVersion = cbcSubjectCatalogVersion
+    }
     data.teacherAssignments ??= []
     data.timetableEntries ??= []
     data.lessonPlans ??= []
@@ -970,7 +987,7 @@ const server = createServer(async (request, response) => {
     const admissionNumbersAdded = ensureAdmissionNumbers(data.admissions)
     const schoolClassesAdded = ensureSchoolClasses(data)
 
-    if (accountsAdded || systemAdminAdded || feePlansAdded) await saveData(data)
+    if (accountsAdded || systemAdminAdded || feePlansAdded || cbcSubjectsAdded) await saveData(data)
     if (!requireAccess(request, response, data, url)) return
 
     if (request.method === 'GET' && url.pathname === '/api/health') return send(response, 200, { status: 'ok' })
@@ -1271,7 +1288,8 @@ const server = createServer(async (request, response) => {
       const teacherName = String(request.account.name || '').trim().toLowerCase()
       const assignments = data.teacherAssignments.filter(item => String(item.staffName || '').trim().toLowerCase() === teacherName)
       const assignmentKeys = new Set(assignments.map(item => `${item.className}|${item.subjectName}`))
-      return send(response, 200, { subjects: data.subjects, assignments, timetable: data.timetableEntries.filter(item => String(item.staffName || '').trim().toLowerCase() === teacherName), assessments: data.assessments.filter(item => assignmentKeys.has(`${item.className}|${item.subjectName}`)) })
+      const assignedSubjectIds = new Set(assignments.map(item => item.subjectId))
+      return send(response, 200, { subjects: data.subjects.filter(item => item.status !== 'Inactive' && assignedSubjectIds.has(item.id)), assignments, timetable: data.timetableEntries.filter(item => String(item.staffName || '').trim().toLowerCase() === teacherName), assessments: data.assessments.filter(item => assignmentKeys.has(`${item.className}|${item.subjectName}`)) })
     }
     if (request.method === 'GET' && url.pathname === '/api/lesson-plans') {
       const plans = request.account.role === 'teacher' ? data.lessonPlans.filter(item => item.preparedBy === request.account.name) : data.lessonPlans
@@ -1722,10 +1740,31 @@ const server = createServer(async (request, response) => {
       const grade = text(input.grade, 20)
       if (!name || !schoolGrades.has(grade)) return send(response, 400, { error: 'Subject name and grade are required.' })
       if (data.subjects.some(item => item.name.toLowerCase() === name.toLowerCase() && item.grade === grade)) return send(response, 400, { error: 'That subject has already been added for this grade.' })
-      const subject = { id: `subject-${Date.now()}`, name, grade, createdAt: new Date().toISOString() }
+      const subject = { id: `subject-${Date.now()}`, name, grade, status: ['Active', 'Inactive'].includes(text(input.status, 20)) ? text(input.status, 20) : 'Active', optional: false, source: 'School custom subject', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
       data.subjects.push(subject)
       await saveData(data)
       return send(response, 201, subject)
+    }
+
+    if (request.method === 'PUT' && url.pathname.startsWith('/api/subjects/')) {
+      const subjectId = decodeURIComponent(url.pathname.split('/').pop())
+      const subject = data.subjects.find(item => item.id === subjectId)
+      if (!subject) return send(response, 404, { error: 'Subject not found.' })
+      const input = await body(request)
+      const name = text(input.name, 70)
+      const grade = text(input.grade, 20)
+      const status = text(input.status, 20)
+      if (!name || !schoolGrades.has(grade) || !['Active', 'Inactive'].includes(status)) return send(response, 400, { error: 'Subject name, grade, and status are required.' })
+      if (data.subjects.some(item => item.id !== subjectId && item.name.toLowerCase() === name.toLowerCase() && item.grade === grade)) return send(response, 400, { error: 'That subject has already been added for this grade.' })
+      const previousName = subject.name
+      Object.assign(subject, { name, grade, status, updatedAt: new Date().toISOString(), updatedBy: request.account.name })
+      if (previousName !== name) {
+        data.teacherAssignments.filter(item => item.subjectId === subjectId).forEach(item => { item.subjectName = name })
+        data.assessments.filter(item => item.subjectName === previousName).forEach(item => { item.subjectName = name })
+        data.lessonPlans.filter(item => item.subjectName === previousName).forEach(item => { item.subjectName = name })
+      }
+      await saveData(data)
+      return send(response, 200, subject)
     }
 
     if (request.method === 'POST' && url.pathname === '/api/teacher-assignments') {
@@ -1735,6 +1774,9 @@ const server = createServer(async (request, response) => {
       const schoolClass = data.schoolClasses.find(item => item.id === text(input.classId, 80))
       const subject = data.subjects.find(item => item.id === text(input.subjectId, 80))
       if (!staff || !schoolClass || !subject) return send(response, 400, { error: 'Choose a staff member, class, and subject.' })
+      if (subject.status === 'Inactive') return send(response, 400, { error: 'Activate this subject before assigning a teacher.' })
+      const classGrade = String(schoolClass.className || '').match(/^(PP1|PP2|Grade [1-9])/i)?.[1] || schoolClass.grade
+      if (String(subject.grade).toLowerCase() !== String(classGrade).toLowerCase()) return send(response, 400, { error: `Choose a ${classGrade} subject for ${schoolClass.className}.` })
       const assignment = { id: `assignment-${Date.now()}`, staffId: staff.id, staffName: staff.fullName, classId: schoolClass.id, className: schoolClass.className, subjectId: subject.id, subjectName: subject.name, academicYear: schoolClass.academicYear, createdAt: new Date().toISOString() }
       data.teacherAssignments.push(assignment)
       await saveData(data)

@@ -80,6 +80,7 @@ export const createStaff = (staff) => request('/api/staff', { method: 'POST', bo
 export const getAcademics = () => request('/api/academics')
 export const getTeacherDashboard = () => request('/api/teacher/dashboard')
 export const createSubject = (subject) => request('/api/subjects', { method: 'POST', body: JSON.stringify(subject) })
+export const updateSubject = (id, subject) => request(`/api/subjects/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify(subject) })
 export const createTeacherAssignment = (assignment) => request('/api/teacher-assignments', { method: 'POST', body: JSON.stringify(assignment) })
 export const createTimetableEntry = (entry) => request('/api/timetable', { method: 'POST', body: JSON.stringify(entry) })
 export const getAttendance = ({ className, date } = {}) => request(`/api/attendance?className=${encodeURIComponent(className || '')}&date=${encodeURIComponent(date || '')}`)
