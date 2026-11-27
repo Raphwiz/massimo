@@ -883,8 +883,8 @@ async function createReceiptPdf(receipt) {
   document.moveTo(36, paymentY + 32).lineTo(384, paymentY + 32).stroke('#B8C9DA')
   document.fillColor('#173662').font('Helvetica').fontSize(7.4).text(receipt.paymentMethod || 'Not recorded', 41, paymentY + 38, { width: 100 }).text(receipt.paymentReference || 'Not recorded', 151, paymentY + 38, { width: 111 }).text(receipt.servedBy || 'School office', 272, paymentY + 38, { width: 107 })
   document.moveTo(36, paymentY + 54).lineTo(384, paymentY + 54).stroke('#D8A20C')
-  document.fillColor('#173662').font('Helvetica-Bold').fontSize(8.3).text('Thank you for your payment.', 36, paymentY + 63, { width: 348, align: 'center' })
-  document.fillColor('#536B84').font('Helvetica').fontSize(6.4).text('This is a computer-generated school-fee receipt. Keep it for account verification.', 36, paymentY + 76, { width: 348, align: 'center' }); document.end(); return finished
+  document.fillColor('#173662').font('Helvetica-Bold').fontSize(8.3).text('Thank you for your payment.', 36, paymentY + 59, { width: 348, align: 'center' })
+  document.fillColor('#536B84').font('Helvetica').fontSize(6.2).text('This is a computer-generated school-fee receipt. Keep it for account verification.', 36, paymentY + 70, { width: 348, align: 'center', lineBreak: false }); document.end(); return finished
 }
 
 function receiptForPrint(data, receipt, servedBy) {
