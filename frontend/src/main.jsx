@@ -255,7 +255,7 @@ function BursarLearnerAccountsPage() {
 }
 
 function ManualPaymentsPage({ secretary = false }) {
-  const voteHeads=['Tuition / School fees','Boarding fees','Meals / Lunch programme','Transport','Examinations / Assessments','Activity, Sports & Trips','Development / PTA projects','Books, Stationery & Learning materials','Medical / Insurance','Uniform','Damages / Lost items']
+  const voteHeads=['Tuition / Boarding fees','Meals / Lunch programme','Transport','Examinations / Assessments','Activity, Sports & Trips','Development / PTA projects','Books, Stationery & Learning materials','Medical / Insurance','Uniform','Damages / Lost items']
   const [learners,setLearners]=useState([]);const [receipts,setReceipts]=useState([]);const [query,setQuery]=useState('');const [selectedId,setSelectedId]=useState('');const [issued,setIssued]=useState(null);const [saving,setSaving]=useState(false);const [status,setStatus]=useState('');const [amount,setAmount]=useState('');const [allocations,setAllocations]=useState({});const [otherNote]=useState('')
   const load=()=>Promise.all([getFinanceLearners(),getReceipts()]).then(([accounts,saved])=>{setLearners(accounts);setReceipts(saved)}).catch(error=>setStatus(error.message))
   useEffect(()=>{load()},[])
