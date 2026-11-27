@@ -431,6 +431,8 @@ function ensureSystemAdminAccount(data) {
 }
 
 const allowedDocumentMimeTypes = new Set(['application/pdf', 'image/jpeg', 'image/png'])
+const schoolExpenseAccounts = new Set(['School Cash', 'Equity Paybill 247247 · A/C 803434', 'DTB Paybill 516600 · A/C 808616', 'Trans Nation Paybill 507900 · A/C 9000482', 'Equity Bank Meru · A/C 0140296813439', 'DTB Bank Meru · A/C 0259364001', 'Trans Nation SACCO · A/C 68260900048201', 'Transport · Trans Nation Paybill 507900 · A/C 9000425'])
+const schoolExpenseCategories = new Set(['Salaries', 'Kitchen', 'Drugs / Medical', 'Electricity', 'Repairs & Maintenance', 'Fuel / Insurance', 'School Activities', 'Examinations', 'Equipment Purchase', 'Stationery', 'Facilitation', 'Remedials', 'Education Day', 'Chickens', 'Farm', 'Other'])
 const documentTypes = new Set(['Birth certificate', 'Transfer letter', 'Medical form', 'Passport photograph', 'Admission form', 'Other supporting document'])
 const noticeAudiences = new Set(['All parents and guardians', 'Specific grade parents and guardians', 'All staff', 'All portal users'])
 const noticeStatuses = new Set(['Draft', 'Published'])
@@ -760,7 +762,7 @@ async function createExpensesPdf(entries) {
     document.font('Helvetica').fontSize(7.5).fillColor('#536B84').text(`Generated: ${generated}   |   Entries: ${entries.length}   |   Total expenditure: ${money(total)}`, 42, 129, { width: 511, align: 'center' })
     const headerY = 145
     document.rect(42, headerY, 511, 18).fill('#1D5EAA')
-    document.fillColor('#FFFFFF').font('Helvetica-Bold').fontSize(6.5).text('DATE', 47, headerY + 5).text('PAYEE / DESCRIPTION', 91, headerY + 5).text('CATEGORY', 238, headerY + 5).text('METHOD', 316, headerY + 5).text('REFERENCE / BANK', 372, headerY + 5).text('AMOUNT', 492, headerY + 5, { width: 55, align: 'right' })
+    document.fillColor('#FFFFFF').font('Helvetica-Bold').fontSize(6.3).text('DATE', 47, headerY + 5).text('PAYEE / DESCRIPTION', 91, headerY + 5).text('CATEGORY', 220, headerY + 5).text('METHOD / PAID FROM', 295, headerY + 5).text('REFERENCE', 412, headerY + 5).text('AMOUNT', 492, headerY + 5, { width: 55, align: 'right' })
     y = headerY + 18
   }
   startPage()
@@ -772,10 +774,10 @@ async function createExpensesPdf(entries) {
     const method = entry.paymentMethod || (entry.type === 'Cash out' ? 'Cash' : entry.type || 'Cash')
     const reference = method === 'M-Pesa' ? entry.mpesaReference || entry.reference || '—' : method === 'Cheque' ? `${entry.bank || 'Bank not recorded'} · ${entry.chequeNumber || entry.reference || '—'}` : entry.reference || '—'
     document.fillColor('#173662').font('Helvetica').fontSize(6.8).text(entry.date || '—', 47, y + 6, { width: 40 })
-    document.font('Helvetica-Bold').text(entry.payee || entry.description || '—', 91, y + 4, { width: 138, height: 8, ellipsis: true }).font('Helvetica').fillColor('#536B84').text(entry.description || '', 91, y + 12, { width: 138, height: 7, ellipsis: true })
-    document.fillColor('#173662').text(entry.category || 'Other', 238, y + 6, { width: 70, height: 8, ellipsis: true })
-    document.text(method, 316, y + 6, { width: 51, height: 8, ellipsis: true })
-    document.text(reference, 372, y + 6, { width: 112, height: 8, ellipsis: true })
+    document.font('Helvetica-Bold').text(entry.payee || entry.description || '—', 91, y + 4, { width: 120, height: 8, ellipsis: true }).font('Helvetica').fillColor('#536B84').text(entry.description || '', 91, y + 12, { width: 120, height: 7, ellipsis: true })
+    document.fillColor('#173662').text(entry.category || 'Other', 220, y + 6, { width: 68, height: 8, ellipsis: true })
+    document.font('Helvetica-Bold').text(method, 295, y + 4, { width: 108, height: 8, ellipsis: true }).font('Helvetica').fillColor('#536B84').text(entry.sourceAccount || 'Source not recorded', 295, y + 12, { width: 108, height: 7, ellipsis: true })
+    document.fillColor('#173662').text(reference, 412, y + 6, { width: 72, height: 8, ellipsis: true })
     document.font('Helvetica-Bold').text(Number(entry.amount || 0).toLocaleString('en-KE'), 492, y + 6, { width: 55, align: 'right' })
     document.strokeColor('#DCE5EF').lineWidth(0.5).moveTo(42, y + rowHeight).lineTo(553, y + rowHeight).stroke()
     y += rowHeight
@@ -1555,14 +1557,401 @@ const server = createServer(async (request, response) => {
     if (request.method === 'GET' && url.pathname === '/api/finance/approval-requests') { const items=(data.financeApprovals||[]).filter(item=>request.account.role==='headteacher'||item.requestedBy===request.account.name); return send(response,200,items.slice().sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt)))) }
     if (request.method === 'GET' && url.pathname === '/api/finance/adjustments') return send(response,200,(data.feeAdjustments||[]).slice().sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt))))
     if (request.method === 'GET' && url.pathname === '/api/finance/cashbook') return send(response, 200, data.cashbookEntries.slice().sort((a,b) => String(b.date).localeCompare(String(a.date))))
-    if (request.method === 'POST' && url.pathname === '/api/finance/cashbook') { const input=await body(request); const amount=Number(input.amount); const paymentMethod=text(input.paymentMethod,20); const payee=text(input.payee,120); const description=text(input.description,180); const category=text(input.category,60)||'Other'; const mpesaReference=text(input.mpesaReference,80); const bank=text(input.bank,80); const chequeNumber=text(input.chequeNumber,80); if(!['Cash','M-Pesa','Cheque'].includes(paymentMethod)||!Number.isFinite(amount)||amount<=0||!payee||!description) return send(response,400,{error:'Enter the payment method, payee, description, and a valid amount.'}); if(paymentMethod==='M-Pesa'&&!mpesaReference)return send(response,400,{error:'Enter the M-Pesa transaction reference.'}); if(paymentMethod==='Cheque'&&(!bank||!chequeNumber))return send(response,400,{error:'Enter the cheque bank and cheque number.'}); const reference=paymentMethod==='M-Pesa'?mpesaReference:paymentMethod==='Cheque'?chequeNumber:text(input.reference,80); const entry={id:`expense-${Date.now()}`,date:text(input.date,10)||new Date().toISOString().slice(0,10),type:'Cash out',paymentMethod,payee,category,description,reference,mpesaReference,bank,chequeNumber,amount,createdAt:new Date().toISOString(),createdBy:request.account.name}; data.cashbookEntries.unshift(entry);data.accountAudit.unshift({id:`audit-${Date.now()}`,action:'Expense recorded',by:request.account.name,createdAt:entry.createdAt});addFinanceAudit(data,request,'Created','Expense',entry.id,`${paymentMethod} · ${money(amount)} · ${payee} · ${reference||description}`);await saveData(data);return send(response,201,entry) }
-    if (request.method === 'GET' && url.pathname === '/api/finance/expenses/pdf') { const entries=data.cashbookEntries.filter(item=>item.type==='Cash out').slice().sort((a,b)=>String(b.date).localeCompare(String(a.date))); const pdf=await createExpensesPdf(entries); response.writeHead(200,{'Content-Type':'application/pdf','Content-Disposition':'inline; filename="st_dorothy_expenditure_register.pdf"','Cache-Control':'no-store'}); return response.end(pdf) }
-    if (request.method === 'GET' && url.pathname === '/api/finance/expenses/workbook') { const entries=data.cashbookEntries.filter(item=>item.type==='Cash out').slice().sort((a,b)=>String(b.date).localeCompare(String(a.date))); const workbook=new ExcelJS.Workbook();workbook.creator='St. Dorothy School Massimo';workbook.created=new Date();const sheet=workbook.addWorksheet('Expenses',{views:[{state:'frozen',ySplit:6}]});sheet.columns=[{width:14},{width:23},{width:20},{width:19},{width:18},{width:30},{width:18},{width:22}];try{const crest=workbook.addImage({buffer:await readFile(crestPath),extension:'png'});sheet.addImage(crest,{tl:{col:0,row:0},ext:{width:58,height:58}})}catch{}sheet.mergeCells('B1:H1');sheet.getCell('B1').value="ST. DOROTHY'S SCHOOL MASSIMO";sheet.getCell('B1').font={bold:true,size:16,color:{argb:'FF173662'}};sheet.mergeCells('B2:H2');sheet.getCell('B2').value='P.O. Box 36-60607, Mikinduri, Meru, Kenya · +254 722 841 569 · stdorothysschoolmassimo@gmail.com';sheet.mergeCells('A4:H4');sheet.getCell('A4').value='EXPENDITURE REGISTER';sheet.getCell('A4').font={bold:true,size:13,color:{argb:'FFFFFFFF'}};sheet.getCell('A4').fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF173662'}};sheet.getCell('A4').alignment={horizontal:'center'};sheet.mergeCells('A5:H5');sheet.getCell('A5').value=`Generated: ${new Intl.DateTimeFormat('en-KE',{dateStyle:'medium',timeStyle:'short',timeZone:'Africa/Nairobi'}).format(new Date())} · Total: ${money(entries.reduce((sum,item)=>sum+Number(item.amount||0),0))}`;const header=sheet.addRow(['Date','Payee','Category','Payment method','Reference','Bank / cheque no.','Description','Amount (KES)']);header.font={bold:true,color:{argb:'FFFFFFFF'}};header.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF1D5EAA'}};header.alignment={horizontal:'center',vertical:'middle',wrapText:true};entries.forEach((item,index)=>{const method=item.paymentMethod||(item.type==='Cash out'?'Cash':item.type);const row=sheet.addRow([item.date,item.payee||'',item.category||'Other',method,method==='M-Pesa'?item.mpesaReference||item.reference||'':item.reference||'',method==='Cheque'?`${item.bank||''} · ${item.chequeNumber||''}`.trim():item.bank||'',item.description||'',Number(item.amount||0)]);row.alignment={vertical:'middle',wrapText:true};if(index%2===1)row.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFF6F9FC'}}});sheet.getColumn(8).numFmt='#,##0';sheet.eachRow(row=>row.eachCell(cell=>{cell.border={top:{style:'thin',color:{argb:'FFD9E4EF'}},left:{style:'thin',color:{argb:'FFD9E4EF'}},bottom:{style:'thin',color:{argb:'FFD9E4EF'}},right:{style:'thin',color:{argb:'FFD9E4EF'}}}}));const bytes=await workbook.xlsx.writeBuffer();response.writeHead(200,{'Content-Type':'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','Content-Disposition':'attachment; filename="st_dorothy_expenditure_register.xlsx"'});return response.end(Buffer.from(bytes)) }
-    if (request.method === 'GET' && url.pathname === '/api/finance/bank-deposits') return send(response, 200, data.bankDeposits.slice().sort((a,b) => String(b.depositDate).localeCompare(String(a.depositDate))))
-    if (request.method === 'POST' && url.pathname === '/api/finance/bank-deposits') { const input=await body(request);const amount=Number(input.amount);if(!Number.isFinite(amount)||amount<=0||!text(input.bank,80)||!text(input.slipNumber,80))return send(response,400,{error:'Enter the bank, deposit slip number, and a valid amount.'});const deposit={id:`deposit-${Date.now()}`,depositDate:text(input.depositDate,10)||new Date().toISOString().slice(0,10),bank:text(input.bank,80),slipNumber:text(input.slipNumber,80),amount,notes:text(input.notes,180),createdAt:new Date().toISOString(),createdBy:request.account.name};data.bankDeposits.unshift(deposit);data.accountAudit.unshift({id:`audit-${Date.now()}`,action:'Bank deposit recorded',by:request.account.name,createdAt:deposit.createdAt});addFinanceAudit(data,request,'Created','Bank deposit',deposit.id,`${deposit.bank} · ${deposit.slipNumber} · ${money(amount)}`);await saveData(data);return send(response,201,deposit) }
-    if (request.method === 'POST' && url.pathname === '/api/finance/adjustments') { const input=await body(request);const learner=data.admissions.find(item=>item.id===text(input.admissionId,80));const amount=Number(input.amount);const placement=learner?.placement;if(!learner||!placement?.academicYear||!placement?.term||!Number.isFinite(amount)||amount<=0)return send(response,400,{error:'Choose a placed learner and valid bursary or discount amount.'});const requestItem={id:`approval-${Date.now()}`,type:'Bursary / discount',status:'Pending Headteacher approval',admissionId:learner.id,learnerName:learner.learnerName,admissionNumber:learner.admissionNumber,className:placement.className||learner.grade,academicYear:placement.academicYear,term:placement.term,amount,reason:text(input.reason,180)||'Bursary / approved discount',createdAt:new Date().toISOString(),requestedBy:request.account.name};data.financeApprovals.unshift(requestItem);addFinanceAudit(data,request,'Requested approval','Bursary / discount',requestItem.id,`${requestItem.learnerName} · ${money(amount)} · ${requestItem.term} ${requestItem.academicYear}`);await saveData(data);return send(response,201,requestItem) }
-    if (request.method === 'PUT' && url.pathname.startsWith('/api/finance/approval-requests/')) { const id=decodeURIComponent(url.pathname.slice('/api/finance/approval-requests/'.length));const item=data.financeApprovals.find(entry=>entry.id===id);const input=await body(request);const decision=text(input.decision,12);if(!item)return send(response,404,{error:'Approval request not found.'});if(item.status!=='Pending Headteacher approval')return send(response,400,{error:'This request has already been decided.'});if(!['Approved','Rejected'].includes(decision))return send(response,400,{error:'Choose Approved or Rejected.'});item.status=decision;item.decidedAt=new Date().toISOString();item.decidedBy=request.account.name;item.decisionNote=text(input.decisionNote,180);if(decision==='Approved'&&item.type==='Bursary / discount'){const adjustment={id:`adjustment-${Date.now()}`,admissionId:item.admissionId,learnerName:item.learnerName,admissionNumber:item.admissionNumber,className:item.className,academicYear:item.academicYear,term:item.term,amount:item.amount,reason:item.reason,createdAt:item.decidedAt,createdBy:`Approved by ${request.account.name}`};data.feeAdjustments.unshift(adjustment);addFinanceAudit(data,request,'Approved','Bursary / discount',adjustment.id,`${item.learnerName} · ${money(item.amount)} · requested by ${item.requestedBy}`)}else addFinanceAudit(data,request,'Rejected','Bursary / discount',item.id,`${item.learnerName} · ${money(item.amount)} · ${item.decisionNote||'No reason recorded'}`);await saveData(data);return send(response,200,item) }
-    if (request.method === 'GET' && url.pathname === '/api/finance/defaulters/pdf') { const className = text(url.searchParams.get('className'), 80); const pdf = await createDefaulterListPdf(data, className); const fileName = `st_dorothy_defaulters_${safePdfName(className || 'all_classes')}.pdf`; response.writeHead(200, { 'Content-Type': 'application/pdf', 'Content-Disposition': `inline; filename="${fileName}"`, 'Cache-Control': 'no-store' }); return response.end(pdf) }
+    if (request.method === "POST" && url.pathname === "/api/finance/cashbook") {
+      const input = await body(request);
+      const amount = Number(input.amount);
+      const paymentMethod = text(input.paymentMethod, 20);
+      const payee = text(input.payee, 120);
+      const description = text(input.description, 180);
+      const category = text(input.category, 60) || "Other";
+      const sourceAccount = text(input.sourceAccount, 140);
+      const mpesaReference = text(input.mpesaReference, 80);
+      const bank = text(input.bank, 80);
+      const chequeNumber = text(input.chequeNumber, 80);
+      if (
+        !["Cash", "M-Pesa", "Cheque"].includes(paymentMethod) ||
+        !Number.isFinite(amount) ||
+        amount <= 0 ||
+        !payee ||
+        !description ||
+        !schoolExpenseAccounts.has(sourceAccount) ||
+        !schoolExpenseCategories.has(category)
+      )
+        return send(response, 400, {
+          error:
+            "Choose a valid expense category, payment method and school source account, then enter the payee, description and amount.",
+        });
+      if (paymentMethod === "M-Pesa" && !mpesaReference)
+        return send(response, 400, {
+          error: "Enter the M-Pesa transaction reference.",
+        });
+      if (paymentMethod === "Cheque" && (!bank || !chequeNumber))
+        return send(response, 400, {
+          error: "Enter the cheque bank and cheque number.",
+        });
+      const reference =
+        paymentMethod === "M-Pesa"
+          ? mpesaReference
+          : paymentMethod === "Cheque"
+            ? chequeNumber
+            : text(input.reference, 80);
+      const entry = {
+        id: `expense-${Date.now()}`,
+        date: text(input.date, 10) || new Date().toISOString().slice(0, 10),
+        type: "Cash out",
+        paymentMethod,
+        payee,
+        category,
+        sourceAccount,
+        description,
+        reference,
+        mpesaReference,
+        bank,
+        chequeNumber,
+        amount,
+        createdAt: new Date().toISOString(),
+        createdBy: request.account.name,
+      };
+      data.cashbookEntries.unshift(entry);
+      data.accountAudit.unshift({
+        id: `audit-${Date.now()}`,
+        action: "Expense recorded",
+        by: request.account.name,
+        createdAt: entry.createdAt,
+      });
+      addFinanceAudit(
+        data,
+        request,
+        "Created",
+        "Expense",
+        entry.id,
+        `${paymentMethod} · ${sourceAccount} · ${money(amount)} · ${payee} · ${reference || description}`,
+      );
+      await saveData(data);
+      return send(response, 201, entry);
+    }
+    if (
+      request.method === "GET" &&
+      url.pathname === "/api/finance/expenses/pdf"
+    ) {
+      const entries = data.cashbookEntries
+        .filter((item) => item.type === "Cash out")
+        .slice()
+        .sort((a, b) => String(b.date).localeCompare(String(a.date)));
+      const pdf = await createExpensesPdf(entries);
+      response.writeHead(200, {
+        "Content-Type": "application/pdf",
+        "Content-Disposition":
+          'inline; filename="st_dorothy_expenditure_register.pdf"',
+        "Cache-Control": "no-store",
+      });
+      return response.end(pdf);
+    }
+    if (
+      request.method === "GET" &&
+      url.pathname === "/api/finance/expenses/workbook"
+    ) {
+      const entries = data.cashbookEntries
+        .filter((item) => item.type === "Cash out")
+        .slice()
+        .sort((a, b) => String(b.date).localeCompare(String(a.date)));
+      const workbook = new ExcelJS.Workbook();
+      workbook.creator = "St. Dorothy School Massimo";
+      workbook.created = new Date();
+      const sheet = workbook.addWorksheet("Expenses", {
+        views: [{ state: "frozen", ySplit: 6 }],
+      });
+      sheet.columns = [
+        { width: 14 },
+        { width: 23 },
+        { width: 20 },
+        { width: 19 },
+        { width: 32 },
+        { width: 18 },
+        { width: 30 },
+        { width: 18 },
+        { width: 22 },
+      ];
+      try {
+        const crest = workbook.addImage({
+          buffer: await readFile(crestPath),
+          extension: "png",
+        });
+        sheet.addImage(crest, {
+          tl: { col: 0, row: 0 },
+          ext: { width: 58, height: 58 },
+        });
+      } catch {}
+      sheet.mergeCells("B1:I1");
+      sheet.getCell("B1").value = "ST. DOROTHY'S SCHOOL MASSIMO";
+      sheet.getCell("B1").font = {
+        bold: true,
+        size: 16,
+        color: { argb: "FF173662" },
+      };
+      sheet.mergeCells("B2:I2");
+      sheet.getCell("B2").value =
+        "P.O. Box 36-60607, Mikinduri, Meru, Kenya · +254 722 841 569 · stdorothysschoolmassimo@gmail.com";
+      sheet.mergeCells("A4:I4");
+      sheet.getCell("A4").value = "EXPENDITURE REGISTER";
+      sheet.getCell("A4").font = {
+        bold: true,
+        size: 13,
+        color: { argb: "FFFFFFFF" },
+      };
+      sheet.getCell("A4").fill = {
+        type: "pattern",
+        pattern: "solid",
+        fgColor: { argb: "FF173662" },
+      };
+      sheet.getCell("A4").alignment = { horizontal: "center" };
+      sheet.mergeCells("A5:I5");
+      sheet.getCell("A5").value =
+        `Generated: ${new Intl.DateTimeFormat("en-KE", { dateStyle: "medium", timeStyle: "short", timeZone: "Africa/Nairobi" }).format(new Date())} · Total: ${money(entries.reduce((sum, item) => sum + Number(item.amount || 0), 0))}`;
+      const header = sheet.addRow([
+        "Date",
+        "Payee",
+        "Category",
+        "Payment method",
+        "Paid from school account",
+        "Reference",
+        "Bank / cheque no.",
+        "Description",
+        "Amount (KES)",
+      ]);
+      header.font = { bold: true, color: { argb: "FFFFFFFF" } };
+      header.fill = {
+        type: "pattern",
+        pattern: "solid",
+        fgColor: { argb: "FF1D5EAA" },
+      };
+      header.alignment = {
+        horizontal: "center",
+        vertical: "middle",
+        wrapText: true,
+      };
+      entries.forEach((item, index) => {
+        const method =
+          item.paymentMethod || (item.type === "Cash out" ? "Cash" : item.type);
+        const row = sheet.addRow([
+          item.date,
+          item.payee || "",
+          item.category || "Other",
+          method,
+          item.sourceAccount || "Not recorded",
+          method === "M-Pesa"
+            ? item.mpesaReference || item.reference || ""
+            : item.reference || "",
+          method === "Cheque"
+            ? `${item.bank || ""} · ${item.chequeNumber || ""}`.trim()
+            : item.bank || "",
+          item.description || "",
+          Number(item.amount || 0),
+        ]);
+        row.alignment = { vertical: "middle", wrapText: true };
+        if (index % 2 === 1)
+          row.fill = {
+            type: "pattern",
+            pattern: "solid",
+            fgColor: { argb: "FFF6F9FC" },
+          };
+      });
+      sheet.getColumn(9).numFmt = "#,##0";
+      sheet.eachRow((row) =>
+        row.eachCell((cell) => {
+          cell.border = {
+            top: { style: "thin", color: { argb: "FFD9E4EF" } },
+            left: { style: "thin", color: { argb: "FFD9E4EF" } },
+            bottom: { style: "thin", color: { argb: "FFD9E4EF" } },
+            right: { style: "thin", color: { argb: "FFD9E4EF" } },
+          };
+        }),
+      );
+      const bytes = await workbook.xlsx.writeBuffer();
+      response.writeHead(200, {
+        "Content-Type":
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "Content-Disposition":
+          'attachment; filename="st_dorothy_expenditure_register.xlsx"',
+      });
+      return response.end(Buffer.from(bytes));
+    }
+    if (
+      request.method === "GET" &&
+      url.pathname === "/api/finance/bank-deposits"
+    )
+      return send(
+        response,
+        200,
+        data.bankDeposits
+          .slice()
+          .sort((a, b) =>
+            String(b.depositDate).localeCompare(String(a.depositDate)),
+          ),
+      );
+    if (
+      request.method === "POST" &&
+      url.pathname === "/api/finance/bank-deposits"
+    ) {
+      const input = await body(request);
+      const amount = Number(input.amount);
+      if (
+        !Number.isFinite(amount) ||
+        amount <= 0 ||
+        !text(input.bank, 80) ||
+        !text(input.slipNumber, 80)
+      )
+        return send(response, 400, {
+          error: "Enter the bank, deposit slip number, and a valid amount.",
+        });
+      const deposit = {
+        id: `deposit-${Date.now()}`,
+        depositDate:
+          text(input.depositDate, 10) || new Date().toISOString().slice(0, 10),
+        bank: text(input.bank, 80),
+        slipNumber: text(input.slipNumber, 80),
+        amount,
+        notes: text(input.notes, 180),
+        createdAt: new Date().toISOString(),
+        createdBy: request.account.name,
+      };
+      data.bankDeposits.unshift(deposit);
+      data.accountAudit.unshift({
+        id: `audit-${Date.now()}`,
+        action: "Bank deposit recorded",
+        by: request.account.name,
+        createdAt: deposit.createdAt,
+      });
+      addFinanceAudit(
+        data,
+        request,
+        "Created",
+        "Bank deposit",
+        deposit.id,
+        `${deposit.bank} · ${deposit.slipNumber} · ${money(amount)}`,
+      );
+      await saveData(data);
+      return send(response, 201, deposit);
+    }
+    if (
+      request.method === "POST" &&
+      url.pathname === "/api/finance/adjustments"
+    ) {
+      const input = await body(request);
+      const learner = data.admissions.find(
+        (item) => item.id === text(input.admissionId, 80),
+      );
+      const amount = Number(input.amount);
+      const placement = learner?.placement;
+      if (
+        !learner ||
+        !placement?.academicYear ||
+        !placement?.term ||
+        !Number.isFinite(amount) ||
+        amount <= 0
+      )
+        return send(response, 400, {
+          error:
+            "Choose a placed learner and valid bursary or discount amount.",
+        });
+      const requestItem = {
+        id: `approval-${Date.now()}`,
+        type: "Bursary / discount",
+        status: "Pending Headteacher approval",
+        admissionId: learner.id,
+        learnerName: learner.learnerName,
+        admissionNumber: learner.admissionNumber,
+        className: placement.className || learner.grade,
+        academicYear: placement.academicYear,
+        term: placement.term,
+        amount,
+        reason: text(input.reason, 180) || "Bursary / approved discount",
+        createdAt: new Date().toISOString(),
+        requestedBy: request.account.name,
+      };
+      data.financeApprovals.unshift(requestItem);
+      addFinanceAudit(
+        data,
+        request,
+        "Requested approval",
+        "Bursary / discount",
+        requestItem.id,
+        `${requestItem.learnerName} · ${money(amount)} · ${requestItem.term} ${requestItem.academicYear}`,
+      );
+      await saveData(data);
+      return send(response, 201, requestItem);
+    }
+    if (
+      request.method === "PUT" &&
+      url.pathname.startsWith("/api/finance/approval-requests/")
+    ) {
+      const id = decodeURIComponent(
+        url.pathname.slice("/api/finance/approval-requests/".length),
+      );
+      const item = data.financeApprovals.find((entry) => entry.id === id);
+      const input = await body(request);
+      const decision = text(input.decision, 12);
+      if (!item)
+        return send(response, 404, { error: "Approval request not found." });
+      if (item.status !== "Pending Headteacher approval")
+        return send(response, 400, {
+          error: "This request has already been decided.",
+        });
+      if (!["Approved", "Rejected"].includes(decision))
+        return send(response, 400, { error: "Choose Approved or Rejected." });
+      item.status = decision;
+      item.decidedAt = new Date().toISOString();
+      item.decidedBy = request.account.name;
+      item.decisionNote = text(input.decisionNote, 180);
+      if (decision === "Approved" && item.type === "Bursary / discount") {
+        const adjustment = {
+          id: `adjustment-${Date.now()}`,
+          admissionId: item.admissionId,
+          learnerName: item.learnerName,
+          admissionNumber: item.admissionNumber,
+          className: item.className,
+          academicYear: item.academicYear,
+          term: item.term,
+          amount: item.amount,
+          reason: item.reason,
+          createdAt: item.decidedAt,
+          createdBy: `Approved by ${request.account.name}`,
+        };
+        data.feeAdjustments.unshift(adjustment);
+        addFinanceAudit(
+          data,
+          request,
+          "Approved",
+          "Bursary / discount",
+          adjustment.id,
+          `${item.learnerName} · ${money(item.amount)} · requested by ${item.requestedBy}`,
+        );
+      } else
+        addFinanceAudit(
+          data,
+          request,
+          "Rejected",
+          "Bursary / discount",
+          item.id,
+          `${item.learnerName} · ${money(item.amount)} · ${item.decisionNote || "No reason recorded"}`,
+        );
+      await saveData(data);
+      return send(response, 200, item);
+    }
+    if (
+      request.method === "GET" &&
+      url.pathname === "/api/finance/defaulters/pdf"
+    ) {
+      const className = text(url.searchParams.get("className"), 80);
+      const pdf = await createDefaulterListPdf(data, className);
+      const fileName = `st_dorothy_defaulters_${safePdfName(className || "all_classes")}.pdf`;
+      response.writeHead(200, {
+        "Content-Type": "application/pdf",
+        "Content-Disposition": `inline; filename="${fileName}"`,
+        "Cache-Control": "no-store",
+      });
+      return response.end(pdf);
+    }
     if (request.method === 'GET' && url.pathname === '/api/finance/operations-workbook') { const className=text(url.searchParams.get('className'),80); const report=text(url.searchParams.get('report'),20)||'all'; if(!['all','defaulters','deposits','cashbook'].includes(report)) return send(response,400,{error:'Invalid finance report requested.'}); const workbook=new ExcelJS.Workbook();workbook.creator='St. Dorothy School Massimo';const addTitle=async(sheet,title,headers)=>{sheet.columns=headers.map(()=>({width:22}));try{const crest=workbook.addImage({buffer:await readFile(crestPath),extension:'png'});sheet.addImage(crest,{tl:{col:0,row:0},ext:{width:54,height:54}})}catch{}sheet.mergeCells(`B1:${String.fromCharCode(64+headers.length)}1`);sheet.getCell('B1').value="ST. DOROTHY'S SCHOOL MASSIMO";sheet.getCell('B1').font={bold:true,size:16,color:{argb:'173662'}};sheet.mergeCells(`B2:${String.fromCharCode(64+headers.length)}2`);sheet.getCell('B2').value=`${title} · Generated ${new Date().toLocaleString('en-KE')}`;sheet.getRow(4).values=headers;sheet.getRow(4).font={bold:true,color:{argb:'FFFFFF'}};sheet.getRow(4).fill={type:'pattern',pattern:'solid',fgColor:{argb:'1D5EAA'}};sheet.views=[{state:'frozen',ySplit:4}]};if(report==='all'||report==='defaulters'){const def=workbook.addWorksheet('Defaulters');await addTitle(def,'Outstanding fee balances',['Learner','Admission number','Class','Guardian','Phone','Fee due','Paid','Balance']);data.admissions.map(l=>({l,f:currentFeeSummary(data,l)})).filter(({l,f})=>(!className||(l.placement?.className||l.grade)===className)&&Number(f.balance||0)>0).forEach(({l,f})=>def.addRow([l.learnerName,l.admissionNumber,l.placement?.className||l.grade,l.guardianName,l.guardianPhone,f.feeDue||0,f.totalPaid||0,f.balance||0]))}if(report==='all'||report==='deposits'){const dep=workbook.addWorksheet('Bank Deposits');await addTitle(dep,'Bank deposits',['Date','Bank','Deposit slip','Amount (KES)','Notes','Recorded by']);data.bankDeposits.forEach(i=>dep.addRow([i.depositDate,i.bank,i.slipNumber,i.amount,i.notes,i.createdBy]))}if(report==='all'||report==='cashbook'){const cash=workbook.addWorksheet('Cashbook Expenses');await addTitle(cash,'Daily cashbook expenses',['Date','Type','Description','Reference','Amount (KES)','Recorded by']);data.cashbookEntries.filter(i=>i.type==='Cash out').forEach(i=>cash.addRow([i.date,i.type,i.description,i.reference,i.amount,i.createdBy]))}const filenames={all:'st_dorothy_finance_operations.xlsx',defaulters:`st_dorothy_defaulters_${safePdfName(className||'all_classes')}.xlsx`,deposits:'st_dorothy_bank_deposits.xlsx',cashbook:'st_dorothy_cashbook_expenses.xlsx'};const bytes=await workbook.xlsx.writeBuffer();response.writeHead(200,{'Content-Type':'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','Content-Disposition':`attachment; filename="${filenames[report]}"`});return response.end(Buffer.from(bytes)) }
     if (request.method === 'GET' && url.pathname === '/api/finance/statements-workbook') {
       const outstandingOnly = url.searchParams.get('outstanding') !== 'false'
