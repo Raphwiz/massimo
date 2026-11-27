@@ -888,7 +888,14 @@ function receiptForPrint(data, receipt, servedBy) {
     remainingBalance = currentFeeSummary(data, learner).balance + paymentsAfterThisReceipt
   }
   const balanceBeforePayment = remainingBalance === null ? null : remainingBalance + Number(receipt.amount || 0)
-  return { ...receipt, remainingBalance, balanceBeforePayment, servedBy: servedBy || receipt.servedBy || 'School office' }
+  let allocations = Array.isArray(receipt.allocations) && receipt.allocations.length ? receipt.allocations : []
+  if (!allocations.length) {
+    const historicalBalance = learner ? currentFeeSummary(data, learner).importedBalance : false
+    const arrearsAmount = historicalBalance && balanceBeforePayment !== null ? Math.min(Number(receipt.amount || 0), Math.max(0, balanceBeforePayment)) : 0
+    const remainder = Math.max(0, Number(receipt.amount || 0) - arrearsAmount)
+    allocations = [...(arrearsAmount > 0 ? [{ voteHead:'Arrears', amount:arrearsAmount, automatic:true }] : []), ...(remainder > 0 ? [{ voteHead:'Tuition / School fees', amount:remainder }] : [])]
+  }
+  return { ...receipt, allocations, remainingBalance, balanceBeforePayment, servedBy: servedBy || receipt.servedBy || 'School office' }
 }
 
 function learnerAttendanceSummary(data, admissionId) {
