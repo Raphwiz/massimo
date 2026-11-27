@@ -419,19 +419,706 @@ function ConnectedSecretarySmsPage(){
 <div className="sms-topup-form"><label>Credit pack<select defaultValue="500"><option value="100">100 credits · KES 80</option><option value="500">500 credits · KES 400</option><option value="1000">1,000 credits · KES 800</option><option value="2000">2,000 credits · KES 1,600</option><option value="5000">5,000 credits · KES 4,000</option></select></label></div>
 <div className="sms-stk-preview"><div><strong>Pay by M-Pesa</strong><small>Choose a credit pack, enter the payment number, then send the STK prompt.</small></div><label>Phone number<input type="tel" placeholder="2547XXXXXXXX" inputMode="numeric"/></label><button type="button" onClick={()=>setStatus('M-Pesa STK Push preview: the real prompt will be sent here as soon as the Till connection is live.')}>Send STK Push <ChevronRight size={16}/></button></div><small className="sms-topup-note"><LockKeyhole size={14}/> M-Pesa checkout is being connected. No payment is requested by this preview yet.</small>
 {wallet?.topups?.length>0&&<div className="sms-topup-history">{wallet.topups.slice(0,3).map(item=><p key={item.id}><strong>{item.status==='Verified'?`+${item.credits} credits`:`${item.credits} credits pending`}</strong><span>{item.paymentChannel} · {item.paymentReference}</span></p>)}</div>}</section></div><section className="panel sms-history"><div className="panel-heading"><h2>Recent SMS activity</h2><span>{loading?'Loading…':history.length?`${history.length} saved message${history.length===1?'':'s'}`:'No messages yet'}</span></div>{history.length?history.map(item=><div className="managed-notice" key={item.id}><MessageSquare size={19}/><div><strong>{item.audience} · {item.count} contacts</strong><small>{item.text}</small></div><span>{item.status}</span></div>):<div className="sms-empty"><MessageSquare size={25}/><strong>No messages sent yet</strong><span>Confirmed gateway activity will appear here.</span></div>}</section>{status&&<button className="parent-toast" onClick={()=>setStatus('')}><ClipboardCheck size={17}/><span>{status}</span><b>×</b></button>}</div>}
-function ConnectedSecretaryAdmissionsPage(){const [applications,setApplications]=useState([]);const [formOpen,setFormOpen]=useState(false);const [status,setStatus]=useState('');const [loading,setLoading]=useState(true);const [saving,setSaving]=useState(false);useEffect(()=>{getAdmissions().then(setApplications).catch(error=>setStatus(error.message)).finally(()=>setLoading(false))},[]);const submit=async(event)=>{event.preventDefault();const form=new FormData(event.currentTarget);const application={learnerName:String(form.get('learnerName')||'').trim(),grade:String(form.get('grade')||''),guardianName:String(form.get('guardianName')||'').trim(),guardianPhone:String(form.get('guardianPhone')||'').trim(),relationship:String(form.get('relationship')||''),formerSchool:String(form.get('formerSchool')||'').trim(),medicalNotes:String(form.get('medicalNotes')||'').trim(),birthCertificateProvided:form.get('birthCertificateProvided')==='on'};setSaving(true);try{const saved=await createAdmission(application);setApplications(items=>[saved,...items]);setStatus(`${saved.learnerName}'s admission application has been saved.`);setFormOpen(false);event.currentTarget.reset()}catch(error){setStatus(error.message)}finally{setSaving(false)}};return <div className="office-page admissions-manager"><div className="office-page-heading"><div><p className="eyebrow">School office · Connected</p><h2>Admissions</h2><span>Capture and review applications in the school portal database.</span></div><button onClick={()=>setFormOpen(open=>!open)}>{formOpen?'Close form':'New application'} <ChevronRight size={16}/></button></div>{formOpen&&<section className="panel admission-form-panel"><div className="panel-heading"><h2>New admission application</h2><span>Fields marked * are required</span></div><form onSubmit={submit}><label>Learner full name *<input name="learnerName" placeholder="Child’s full name" required/></label><label>Applying for *<select name="grade" defaultValue=""><option value="" disabled>Select grade</option>{['Pre-Primary','Grade 1','Grade 2','Grade 3','Grade 4','Grade 5','Grade 6','Grade 7','Grade 8','Grade 9'].map(grade=><option key={grade}>{grade}</option>)}</select></label><label>Parent or guardian name *<input name="guardianName" placeholder="Full name" required/></label><label>Guardian phone *<input name="guardianPhone" type="tel" placeholder="2547XXXXXXXX" required/></label><label>Relationship to learner<select name="relationship" defaultValue="Parent"><option>Parent</option><option>Guardian</option><option>Other family member</option></select></label><label>Former school<input name="formerSchool" placeholder="Optional for new admissions"/></label><label className="admission-notes">Medical or allergy notes<textarea name="medicalNotes" placeholder="Optional — restricted to authorised staff"/></label><label className="admission-check"><input name="birthCertificateProvided" type="checkbox"/><span>Birth certificate copy received</span></label><button type="submit" disabled={saving}>{saving?'Saving application…':'Save admission application'} <ChevronRight size={17}/></button></form></section>}<section className="panel full-panel admissions-table"><div className="panel-heading"><h2>Saved applications</h2><span>{loading?'Loading…':`${applications.length} application${applications.length===1?'':'s'}`}</span></div>{applications.length?<OfficeTable headers={['Applicant','Applying for','Guardian','Status']} rows={applications.map(application=>[application.learnerName,application.grade,application.guardianName,application.status])}/>:!loading&&<div className="admissions-empty"><UserRound size={25}/><strong>No saved applications yet</strong><span>Use “New application” to capture the first admission record.</span></div>}</section>{status&&<button className="parent-toast" onClick={()=>setStatus('')}><ClipboardCheck size={17}/><span>{status}</span><b>×</b></button>}</div>}
+function ConnectedSecretaryAdmissionsPage() {
+  const [applications, setApplications] = useState([]);
+  const [formOpen, setFormOpen] = useState(false);
+  const [status, setStatus] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  useEffect(() => {
+    getAdmissions()
+      .then(setApplications)
+      .catch((error) => setStatus(error.message))
+      .finally(() => setLoading(false));
+  }, []);
+  const submit = async (event) => {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const application = {
+      learnerName: String(form.get("learnerName") || "").trim(),
+      grade: String(form.get("grade") || ""),
+      guardianName: String(form.get("guardianName") || "").trim(),
+      guardianPhone: String(form.get("guardianPhone") || "").trim(),
+      relationship: String(form.get("relationship") || ""),
+      formerSchool: String(form.get("formerSchool") || "").trim(),
+      medicalNotes: String(form.get("medicalNotes") || "").trim(),
+      birthCertificateProvided: form.get("birthCertificateProvided") === "on",
+    };
+    setSaving(true);
+    try {
+      const saved = await createAdmission(application);
+      setApplications((items) => [saved, ...items]);
+      setStatus(`${saved.learnerName}'s admission application has been saved.`);
+      setFormOpen(false);
+      event.currentTarget.reset();
+    } catch (error) {
+      setStatus(error.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+  return (
+    <div className="office-page admissions-manager">
+      <div className="office-page-heading">
+        <div>
+          <p className="eyebrow">School office · Connected</p>
+          <h2>Admissions</h2>
+          <span>
+            Capture and review applications in the school portal database.
+          </span>
+        </div>
+        <button onClick={() => setFormOpen((open) => !open)}>
+          {formOpen ? "Close form" : "New application"}{" "}
+          <ChevronRight size={16} />
+        </button>
+      </div>
+      {formOpen && (
+        <section className="panel admission-form-panel">
+          <div className="panel-heading">
+            <h2>New admission application</h2>
+            <span>Fields marked * are required</span>
+          </div>
+          <form onSubmit={submit}>
+            <label>
+              Learner full name *
+              <input
+                name="learnerName"
+                placeholder="Child’s full name"
+                required
+              />
+            </label>
+            <label>
+              Applying for *
+              <select name="grade" defaultValue="">
+                <option value="" disabled>
+                  Select grade
+                </option>
+                {[
+                  "Pre-Primary",
+                  "Grade 1",
+                  "Grade 2",
+                  "Grade 3",
+                  "Grade 4",
+                  "Grade 5",
+                  "Grade 6",
+                  "Grade 7",
+                  "Grade 8",
+                  "Grade 9",
+                ].map((grade) => (
+                  <option key={grade}>{grade}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Parent or guardian name *
+              <input name="guardianName" placeholder="Full name" required />
+            </label>
+            <label>
+              Guardian phone *
+              <input
+                name="guardianPhone"
+                type="tel"
+                placeholder="2547XXXXXXXX"
+                required
+              />
+            </label>
+            <label>
+              Relationship to learner
+              <select name="relationship" defaultValue="Parent">
+                <option>Parent</option>
+                <option>Guardian</option>
+                <option>Other family member</option>
+              </select>
+            </label>
+            <label>
+              Former school
+              <input
+                name="formerSchool"
+                placeholder="Optional for new admissions"
+              />
+            </label>
+            <label className="admission-notes">
+              Medical or allergy notes
+              <textarea
+                name="medicalNotes"
+                placeholder="Optional — restricted to authorised staff"
+              />
+            </label>
+            <label className="admission-check">
+              <input name="birthCertificateProvided" type="checkbox" />
+              <span>Birth certificate copy received</span>
+            </label>
+            <button type="submit" disabled={saving}>
+              {saving ? "Saving application…" : "Save admission application"}{" "}
+              <ChevronRight size={17} />
+            </button>
+          </form>
+        </section>
+      )}
+      <section className="panel full-panel admissions-table">
+        <div className="panel-heading">
+          <h2>Saved applications</h2>
+          <span>
+            {loading
+              ? "Loading…"
+              : `${applications.length} application${applications.length === 1 ? "" : "s"}`}
+          </span>
+        </div>
+        {applications.length ? (
+          <OfficeTable
+            headers={["Applicant", "Applying for", "Guardian", "Status"]}
+            rows={applications.map((application) => [
+              application.learnerName,
+              application.grade,
+              application.guardianName,
+              application.status,
+            ])}
+          />
+        ) : (
+          !loading && (
+            <div className="admissions-empty">
+              <UserRound size={25} />
+              <strong>No saved applications yet</strong>
+              <span>
+                Use “New application” to capture the first admission record.
+              </span>
+            </div>
+          )
+        )}
+      </section>
+      {status && (
+        <button className="parent-toast" onClick={() => setStatus("")}>
+          <ClipboardCheck size={17} />
+          <span>{status}</span>
+          <b>×</b>
+        </button>
+      )}
+    </div>
+  );
+}
 function AdmissionInterviewsPage({ role }) {
-  const secretary = role === 'secretary'
-  const [candidates,setCandidates]=useState([]); const [loading,setLoading]=useState(true); const [status,setStatus]=useState(''); const [formOpen,setFormOpen]=useState(false); const [tab,setTab]=useState('All'); const [actionId,setActionId]=useState(''); const [saving,setSaving]=useState(false)
-  const load=()=>{setLoading(true);return getAdmissionInterviews().then(setCandidates).catch(error=>setStatus(error.message)).finally(()=>setLoading(false))}
-  useEffect(()=>{load()},[])
-  const register=async event=>{event.preventDefault();const form=new FormData(event.currentTarget);setSaving(true);try{const saved=await createAdmissionInterview({learnerName:String(form.get('learnerName')||'').trim(),grade:String(form.get('grade')||''),dateOfBirth:String(form.get('dateOfBirth')||''),gender:String(form.get('gender')||''),formerSchool:String(form.get('formerSchool')||'').trim(),guardianName:String(form.get('guardianName')||'').trim(),guardianPhone:String(form.get('guardianPhone')||'').trim(),interviewDate:String(form.get('interviewDate')||'')});setCandidates(items=>[saved,...items]);setStatus(`${saved.candidateNumber} registered. Confirm the KES ${saved.feeAmount.toLocaleString('en-KE')} interview fee before assessment.`);setFormOpen(false);event.currentTarget.reset()}catch(error){setStatus(error.message)}finally{setSaving(false)}}
-  const confirmPayment=async(event,candidate)=>{event.preventDefault();const form=new FormData(event.currentTarget);setSaving(true);try{const saved=await updateAdmissionInterview(candidate.id,{action:'confirm-payment',amount:Number(form.get('amount')),paymentMethod:String(form.get('paymentMethod')),paymentReference:String(form.get('paymentReference')).trim()});setCandidates(items=>items.map(item=>item.id===saved.id?saved:item));setActionId('');setStatus(`Interview fee confirmed. Receipt ${saved.receiptNumber} has been issued.`)}catch(error){setStatus(error.message)}finally{setSaving(false)}}
-  const recordResult=async(event,candidate)=>{event.preventDefault();const form=new FormData(event.currentTarget);setSaving(true);try{const saved=await updateAdmissionInterview(candidate.id,{action:'record-result',score:Number(form.get('score')),decision:String(form.get('decision')),remarks:String(form.get('remarks')).trim()});setCandidates(items=>items.map(item=>item.id===saved.id?saved:item));setActionId('');setStatus(`${saved.learnerName} has been marked ${saved.decision}.`)}catch(error){setStatus(error.message)}finally{setSaving(false)}}
-  const admit=async candidate=>{setSaving(true);try{const saved=await updateAdmissionInterview(candidate.id,{action:'admit'});setCandidates(items=>items.map(item=>item.id===saved.id?saved:item));setStatus(`${saved.learnerName} has moved to Admissions as ${saved.admissionNumber}.`)}catch(error){setStatus(error.message)}finally{setSaving(false)}}
-  const tabs=['All','Awaiting payment','Scheduled','Passed','Review','Unsuccessful','Admitted'];const filtered=tab==='All'?candidates:candidates.filter(item=>item.status===tab)
-  const counts={unpaid:candidates.filter(item=>item.feeStatus!=='Paid').length,scheduled:candidates.filter(item=>item.status==='Scheduled').length,passed:candidates.filter(item=>item.decision==='Passed'&&!item.admissionId).length}
-  return <div className={`office-page interview-workspace ${secretary?'secretary-interviews':'leadership-page'}`}><div className="office-page-heading"><div><p className="eyebrow">{secretary?'School office · Admissions':'School leadership · Candidate assessment'}</p><h2>Admission interviews</h2><span>{secretary?'Register candidates, confirm non-refundable fees, and transfer successful learners to admissions.':'Assess paid candidates and record the final admission recommendation.'}</span></div>{secretary&&<button onClick={()=>setFormOpen(open=>!open)}>{formOpen?'Close form':'Register candidate'} <ChevronRight size={16}/></button>}</div><section className="interview-metrics"><article><span><Users size={19}/></span><div><small>Total candidates</small><strong>{loading?'…':candidates.length}</strong></div></article><article><span className="amber"><Clock3 size={19}/></span><div><small>Awaiting payment</small><strong>{loading?'…':counts.unpaid}</strong></div></article><article><span className="purple"><ClipboardCheck size={19}/></span><div><small>Ready for interview</small><strong>{loading?'…':counts.scheduled}</strong></div></article><article><span className="green"><GraduationCap size={19}/></span><div><small>Admission ready</small><strong>{loading?'…':counts.passed}</strong></div></article></section>{formOpen&&secretary&&<section className="panel interview-registration"><div className="panel-heading"><div><h2>Register interview candidate</h2><span>The non-refundable fee is set automatically from the applying grade.</span></div></div><form onSubmit={register}><label>Learner full name<input name="learnerName" required/></label><label>Applying for<select name="grade" defaultValue="" required><option value="" disabled>Select grade</option>{['Baby Class','Grade 1','Grade 2','Grade 3','Grade 4','Grade 5','Grade 6','Grade 7','Grade 8','Grade 9'].map(grade=><option key={grade}>{grade}</option>)}</select></label><label>Date of birth<input name="dateOfBirth" type="date"/></label><label>Gender<select name="gender" defaultValue=""><option value="">Not specified</option><option>Female</option><option>Male</option></select></label><label>Parent / guardian<input name="guardianName" required/></label><label>Guardian phone<input name="guardianPhone" placeholder="2547XXXXXXXX" required/></label><label>Former school<input name="formerSchool" placeholder="Optional"/></label><label>Interview date<input name="interviewDate" type="date" required/></label><button type="submit" disabled={saving}>{saving?'Registering…':'Register candidate'} <ChevronRight size={17}/></button></form></section>}<section className="panel interview-register"><div className="interview-tabs">{tabs.map(item=><button className={tab===item?'active':''} onClick={()=>setTab(item)} key={item}>{item}<span>{item==='All'?candidates.length:candidates.filter(candidate=>candidate.status===item).length}</span></button>)}</div>{filtered.length?<div className="interview-cards">{filtered.map(candidate=><article className="interview-card" key={candidate.id}><header><div className="candidate-avatar">{candidate.learnerName.split(/\s+/).map(name=>name[0]).join('').slice(0,2)}</div><div><small>{candidate.candidateNumber}</small><h3>{candidate.learnerName}</h3><p>{candidate.grade} · Interview {candidate.interviewDate}</p></div><span className={`interview-status ${candidate.status.toLowerCase().replace(/\s+/g,'-')}`}>{candidate.status}</span></header><div className="candidate-facts"><div><small>Parent / guardian</small><strong>{candidate.guardianName}</strong><span>{candidate.guardianPhone}</span></div><div><small>Interview fee</small><strong>KES {Number(candidate.feeAmount).toLocaleString('en-KE')}</strong><span className={candidate.feeStatus==='Paid'?'paid':'unpaid'}>{candidate.feeStatus}{candidate.receiptNumber?` · ${candidate.receiptNumber}`:''}</span></div><div><small>Interview result</small><strong>{candidate.score===null||candidate.score===undefined?'Not recorded':`${candidate.score}%`}</strong><span>{candidate.decisionBy?`${candidate.decision} · ${candidate.decisionBy}`:candidate.decision}</span></div></div>{candidate.remarks&&<p className="candidate-remarks"><strong>Interview remarks:</strong> {candidate.remarks}</p>}<footer>{secretary&&candidate.feeStatus!=='Paid'&&<button onClick={()=>setActionId(actionId===candidate.id?'':candidate.id)}>Confirm payment</button>}{!secretary&&candidate.feeStatus==='Paid'&&candidate.status!=='Admitted'&&<button onClick={()=>setActionId(actionId===candidate.id?'':candidate.id)}>{candidate.decision==='Pending'?'Record result':'Update result'}</button>}{secretary&&candidate.decision==='Passed'&&!candidate.admissionId&&<button className="primary" onClick={()=>admit(candidate)} disabled={saving}>Proceed to admission <ChevronRight size={15}/></button>}{candidate.status==='Admitted'&&<span className="admitted-note"><ClipboardCheck size={15}/> Admitted as {candidate.admissionNumber}</span>}{candidate.status==='Unsuccessful'&&<span className="unsuccessful-note">Application closed and retained for reference</span>}</footer>{actionId===candidate.id&&secretary&&candidate.feeStatus!=='Paid'&&<form className="interview-action-form" onSubmit={event=>confirmPayment(event,candidate)}><label>Amount<input name="amount" type="number" value={candidate.feeAmount} readOnly/></label><label>Payment channel<select name="paymentMethod" defaultValue="M-Pesa"><option>M-Pesa</option><option>Cash</option><option>Bank</option></select></label><label>Payment reference<input name="paymentReference" required/></label><button disabled={saving}>{saving?'Confirming…':'Confirm fee & issue receipt'}</button></form>}{actionId===candidate.id&&!secretary&&candidate.feeStatus==='Paid'&&<form className="interview-action-form result" onSubmit={event=>recordResult(event,candidate)}><label>Score out of 100<input name="score" type="number" min="0" max="100" defaultValue={candidate.score??''} required/></label><label>Decision<select name="decision" defaultValue={candidate.decision==='Pending'?'Passed':candidate.decision}><option>Passed</option><option>Review</option><option>Unsuccessful</option></select></label><label className="remarks">Assessment remarks<textarea name="remarks" defaultValue={candidate.remarks} required/></label><button disabled={saving}>{saving?'Saving…':'Save interview decision'}</button></form>}</article>)}</div>:!loading&&<div className="admissions-empty"><UserRound size={25}/><strong>No candidates in this stage</strong><span>Candidate records will appear here as they move through the interview workflow.</span></div>}</section>{status&&<button className="parent-toast" onClick={()=>setStatus('')}><ClipboardCheck size={17}/><span>{status}</span><b>×</b></button>}</div>
+  const secretary = role === "secretary";
+  const [candidates, setCandidates] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [status, setStatus] = useState("");
+  const [formOpen, setFormOpen] = useState(false);
+  const [tab, setTab] = useState("All");
+  const [actionId, setActionId] = useState("");
+  const [saving, setSaving] = useState(false);
+  const load = () => {
+    setLoading(true);
+    return getAdmissionInterviews()
+      .then(setCandidates)
+      .catch((error) => setStatus(error.message))
+      .finally(() => setLoading(false));
+  };
+  useEffect(() => {
+    load();
+  }, []);
+  const register = async (event) => {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    setSaving(true);
+    try {
+      const saved = await createAdmissionInterview({
+        learnerName: String(form.get("learnerName") || "").trim(),
+        grade: String(form.get("grade") || ""),
+        dateOfBirth: String(form.get("dateOfBirth") || ""),
+        gender: String(form.get("gender") || ""),
+        formerSchool: String(form.get("formerSchool") || "").trim(),
+        fatherName: String(form.get("fatherName") || "").trim(),
+        fatherPhone: String(form.get("fatherPhone") || "").trim(),
+        motherName: String(form.get("motherName") || "").trim(),
+        motherPhone: String(form.get("motherPhone") || "").trim(),
+        interviewDate: String(form.get("interviewDate") || ""),
+      });
+      setCandidates((items) => [saved, ...items]);
+      setStatus(
+        `${saved.candidateNumber} registered. Confirm the KES ${saved.feeAmount.toLocaleString("en-KE")} interview fee before assessment.`,
+      );
+      setFormOpen(false);
+      event.currentTarget.reset();
+    } catch (error) {
+      setStatus(error.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+  const confirmPayment = async (event, candidate) => {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    setSaving(true);
+    try {
+      const saved = await updateAdmissionInterview(candidate.id, {
+        action: "confirm-payment",
+        amount: Number(form.get("amount")),
+        paymentMethod: String(form.get("paymentMethod")),
+        paymentReference: String(form.get("paymentReference")).trim(),
+      });
+      setCandidates((items) =>
+        items.map((item) => (item.id === saved.id ? saved : item)),
+      );
+      setActionId("");
+      setStatus(
+        `Interview fee confirmed. Receipt ${saved.receiptNumber} has been issued.`,
+      );
+    } catch (error) {
+      setStatus(error.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+  const recordResult = async (event, candidate) => {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    setSaving(true);
+    try {
+      const saved = await updateAdmissionInterview(candidate.id, {
+        action: "record-result",
+        score: Number(form.get("score")),
+        decision: String(form.get("decision")),
+        remarks: String(form.get("remarks")).trim(),
+      });
+      setCandidates((items) =>
+        items.map((item) => (item.id === saved.id ? saved : item)),
+      );
+      setActionId("");
+      setStatus(`${saved.learnerName} has been marked ${saved.decision}.`);
+    } catch (error) {
+      setStatus(error.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+  const admit = async (candidate) => {
+    setSaving(true);
+    try {
+      const saved = await updateAdmissionInterview(candidate.id, {
+        action: "admit",
+      });
+      setCandidates((items) =>
+        items.map((item) => (item.id === saved.id ? saved : item)),
+      );
+      setStatus(
+        `${saved.learnerName} has moved to Admissions as ${saved.admissionNumber}.`,
+      );
+    } catch (error) {
+      setStatus(error.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+  const tabs = [
+    "All",
+    "Awaiting payment",
+    "Scheduled",
+    "Passed",
+    "Review",
+    "Unsuccessful",
+    "Admitted",
+  ];
+  const filtered =
+    tab === "All"
+      ? candidates
+      : candidates.filter((item) => item.status === tab);
+  const counts = {
+    unpaid: candidates.filter((item) => item.feeStatus !== "Paid").length,
+    scheduled: candidates.filter((item) => item.status === "Scheduled").length,
+    passed: candidates.filter(
+      (item) => item.decision === "Passed" && !item.admissionId,
+    ).length,
+  };
+  return (
+    <div
+      className={`office-page interview-workspace ${secretary ? "secretary-interviews" : "leadership-page"}`}
+    >
+      <div className="office-page-heading">
+        <div>
+          <p className="eyebrow">
+            {secretary
+              ? "School office · Admissions"
+              : "School leadership · Candidate assessment"}
+          </p>
+          <h2>Admission interviews</h2>
+          <span>
+            {secretary
+              ? "Register candidates, confirm non-refundable fees, and transfer successful learners to admissions."
+              : "Assess paid candidates and record the final admission recommendation."}
+          </span>
+        </div>
+        {secretary && (
+          <button onClick={() => setFormOpen((open) => !open)}>
+            {formOpen ? "Close form" : "Register candidate"}{" "}
+            <ChevronRight size={16} />
+          </button>
+        )}
+      </div>
+      <section className="interview-metrics">
+        <article>
+          <span>
+            <Users size={19} />
+          </span>
+          <div>
+            <small>Total candidates</small>
+            <strong>{loading ? "…" : candidates.length}</strong>
+          </div>
+        </article>
+        <article>
+          <span className="amber">
+            <Clock3 size={19} />
+          </span>
+          <div>
+            <small>Awaiting payment</small>
+            <strong>{loading ? "…" : counts.unpaid}</strong>
+          </div>
+        </article>
+        <article>
+          <span className="purple">
+            <ClipboardCheck size={19} />
+          </span>
+          <div>
+            <small>Ready for interview</small>
+            <strong>{loading ? "…" : counts.scheduled}</strong>
+          </div>
+        </article>
+        <article>
+          <span className="green">
+            <GraduationCap size={19} />
+          </span>
+          <div>
+            <small>Admission ready</small>
+            <strong>{loading ? "…" : counts.passed}</strong>
+          </div>
+        </article>
+      </section>
+      {formOpen && secretary && (
+        <section className="panel interview-registration">
+          <div className="panel-heading">
+            <div>
+              <h2>Register interview candidate</h2>
+              <span>
+                Enter both parents where available. At least one complete
+                parent name and phone number is required.
+              </span>
+            </div>
+          </div>
+          <form onSubmit={register}>
+            <label>
+              Learner full name
+              <input name="learnerName" required />
+            </label>
+            <label>
+              Applying for
+              <select name="grade" defaultValue="" required>
+                <option value="" disabled>
+                  Select grade
+                </option>
+                {[
+                  "Baby Class",
+                  "Grade 1",
+                  "Grade 2",
+                  "Grade 3",
+                  "Grade 4",
+                  "Grade 5",
+                  "Grade 6",
+                  "Grade 7",
+                  "Grade 8",
+                  "Grade 9",
+                ].map((grade) => (
+                  <option key={grade}>{grade}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Date of birth
+              <input name="dateOfBirth" type="date" />
+            </label>
+            <label>
+              Gender
+              <select name="gender" defaultValue="">
+                <option value="">Not specified</option>
+                <option>Female</option>
+                <option>Male</option>
+              </select>
+            </label>
+            <label>
+              Father's name
+              <input name="fatherName" />
+            </label>
+            <label>
+              Father's phone
+              <input name="fatherPhone" type="tel" placeholder="2547XXXXXXXX" />
+            </label>
+            <label>
+              Mother's name
+              <input name="motherName" />
+            </label>
+            <label>
+              Mother's phone
+              <input name="motherPhone" type="tel" placeholder="2547XXXXXXXX" />
+            </label>
+            <label>
+              Former school
+              <input name="formerSchool" placeholder="Optional" />
+            </label>
+            <label>
+              Interview date
+              <input name="interviewDate" type="date" required />
+            </label>
+            <button type="submit" disabled={saving}>
+              {saving ? "Registering…" : "Register candidate"}{" "}
+              <ChevronRight size={17} />
+            </button>
+          </form>
+        </section>
+      )}
+      <section className="panel interview-register">
+        <div className="interview-tabs">
+          {tabs.map((item) => (
+            <button
+              className={tab === item ? "active" : ""}
+              onClick={() => setTab(item)}
+              key={item}
+            >
+              {item}
+              <span>
+                {item === "All"
+                  ? candidates.length
+                  : candidates.filter((candidate) => candidate.status === item)
+                      .length}
+              </span>
+            </button>
+          ))}
+        </div>
+        {filtered.length ? (
+          <div className="interview-cards">
+            {filtered.map((candidate) => (
+              <article className="interview-card" key={candidate.id}>
+                <header>
+                  <div className="candidate-avatar">
+                    {candidate.learnerName
+                      .split(/\s+/)
+                      .map((name) => name[0])
+                      .join("")
+                      .slice(0, 2)}
+                  </div>
+                  <div>
+                    <small>{candidate.candidateNumber}</small>
+                    <h3>{candidate.learnerName}</h3>
+                    <p>
+                      {candidate.grade} · Interview {candidate.interviewDate}
+                    </p>
+                  </div>
+                  <span
+                    className={`interview-status ${candidate.status.toLowerCase().replace(/\s+/g, "-")}`}
+                  >
+                    {candidate.status}
+                  </span>
+                </header>
+                <div className="candidate-facts">
+                  <div>
+                    <small>Father</small>
+                    <strong>{candidate.fatherName || "Not recorded"}</strong>
+                    <span>{candidate.fatherPhone || "No phone recorded"}</span>
+                  </div>
+                  <div>
+                    <small>Mother</small>
+                    <strong>
+                      {candidate.motherName || candidate.guardianName || "Not recorded"}
+                    </strong>
+                    <span>
+                      {candidate.motherPhone || candidate.guardianPhone || "No phone recorded"}
+                    </span>
+                  </div>
+                  <div>
+                    <small>Interview fee</small>
+                    <strong>
+                      KES {Number(candidate.feeAmount).toLocaleString("en-KE")}
+                    </strong>
+                    <span
+                      className={
+                        candidate.feeStatus === "Paid" ? "paid" : "unpaid"
+                      }
+                    >
+                      {candidate.feeStatus}
+                      {candidate.receiptNumber
+                        ? ` · ${candidate.receiptNumber}`
+                        : ""}
+                    </span>
+                  </div>
+                  <div>
+                    <small>Interview result</small>
+                    <strong>
+                      {candidate.score === null || candidate.score === undefined
+                        ? "Not recorded"
+                        : `${candidate.score}%`}
+                    </strong>
+                    <span>
+                      {candidate.decisionBy
+                        ? `${candidate.decision} · ${candidate.decisionBy}`
+                        : candidate.decision}
+                    </span>
+                  </div>
+                </div>
+                {candidate.remarks && (
+                  <p className="candidate-remarks">
+                    <strong>Interview remarks:</strong> {candidate.remarks}
+                  </p>
+                )}
+                <footer>
+                  {secretary && candidate.feeStatus !== "Paid" && (
+                    <button
+                      onClick={() =>
+                        setActionId(
+                          actionId === candidate.id ? "" : candidate.id,
+                        )
+                      }
+                    >
+                      Confirm payment
+                    </button>
+                  )}
+                  {!secretary &&
+                    candidate.feeStatus === "Paid" &&
+                    candidate.status !== "Admitted" && (
+                      <button
+                        onClick={() =>
+                          setActionId(
+                            actionId === candidate.id ? "" : candidate.id,
+                          )
+                        }
+                      >
+                        {candidate.decision === "Pending"
+                          ? "Record result"
+                          : "Update result"}
+                      </button>
+                    )}
+                  {secretary &&
+                    candidate.decision === "Passed" &&
+                    !candidate.admissionId && (
+                      <button
+                        className="primary"
+                        onClick={() => admit(candidate)}
+                        disabled={saving}
+                      >
+                        Proceed to admission <ChevronRight size={15} />
+                      </button>
+                    )}
+                  {candidate.status === "Admitted" && (
+                    <span className="admitted-note">
+                      <ClipboardCheck size={15} /> Admitted as{" "}
+                      {candidate.admissionNumber}
+                    </span>
+                  )}
+                  {candidate.status === "Unsuccessful" && (
+                    <span className="unsuccessful-note">
+                      Application closed and retained for reference
+                    </span>
+                  )}
+                </footer>
+                {actionId === candidate.id &&
+                  secretary &&
+                  candidate.feeStatus !== "Paid" && (
+                    <form
+                      className="interview-action-form"
+                      onSubmit={(event) => confirmPayment(event, candidate)}
+                    >
+                      <label>
+                        Amount
+                        <input
+                          name="amount"
+                          type="number"
+                          value={candidate.feeAmount}
+                          readOnly
+                        />
+                      </label>
+                      <label>
+                        Payment channel
+                        <select name="paymentMethod" defaultValue="M-Pesa">
+                          <option>M-Pesa</option>
+                          <option>Cash</option>
+                          <option>Bank</option>
+                        </select>
+                      </label>
+                      <label>
+                        Payment reference
+                        <input name="paymentReference" required />
+                      </label>
+                      <button disabled={saving}>
+                        {saving ? "Confirming…" : "Confirm fee & issue receipt"}
+                      </button>
+                    </form>
+                  )}
+                {actionId === candidate.id &&
+                  !secretary &&
+                  candidate.feeStatus === "Paid" && (
+                    <form
+                      className="interview-action-form result"
+                      onSubmit={(event) => recordResult(event, candidate)}
+                    >
+                      <label>
+                        Score out of 100
+                        <input
+                          name="score"
+                          type="number"
+                          min="0"
+                          max="100"
+                          defaultValue={candidate.score ?? ""}
+                          required
+                        />
+                      </label>
+                      <label>
+                        Decision
+                        <select
+                          name="decision"
+                          defaultValue={
+                            candidate.decision === "Pending"
+                              ? "Passed"
+                              : candidate.decision
+                          }
+                        >
+                          <option>Passed</option>
+                          <option>Review</option>
+                          <option>Unsuccessful</option>
+                        </select>
+                      </label>
+                      <label className="remarks">
+                        Assessment remarks
+                        <textarea
+                          name="remarks"
+                          defaultValue={candidate.remarks}
+                          required
+                        />
+                      </label>
+                      <button disabled={saving}>
+                        {saving ? "Saving…" : "Save interview decision"}
+                      </button>
+                    </form>
+                  )}
+              </article>
+            ))}
+          </div>
+        ) : (
+          !loading && (
+            <div className="admissions-empty">
+              <UserRound size={25} />
+              <strong>No candidates in this stage</strong>
+              <span>
+                Candidate records will appear here as they move through the
+                interview workflow.
+              </span>
+            </div>
+          )
+        )}
+      </section>
+      {status && (
+        <button className="parent-toast" onClick={() => setStatus("")}>
+          <ClipboardCheck size={17} />
+          <span>{status}</span>
+          <b>×</b>
+        </button>
+      )}
+    </div>
+  );
 }
 
 function ConnectedSecretaryDocumentsPage(){

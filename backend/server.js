@@ -2114,10 +2114,12 @@ const server = createServer(async (request, response) => {
       const input = await body(request)
       const grade = text(input.grade, 20)
       const learnerName = text(input.learnerName, 100)
-      const guardianName = text(input.guardianName, 100)
-      const guardianPhone = normalisePhone(input.guardianPhone)
+      const fatherName = text(input.fatherName, 100), fatherPhone = normalisePhone(input.fatherPhone)
+      const motherName = text(input.motherName, 100), motherPhone = normalisePhone(input.motherPhone)
+      const fatherComplete = Boolean(fatherName && /^254[17]\d{8}$/.test(fatherPhone)), motherComplete = Boolean(motherName && /^254[17]\d{8}$/.test(motherPhone))
+      const guardianName = motherComplete ? motherName : fatherName, guardianPhone = motherComplete ? motherPhone : fatherPhone
       const interviewDate = text(input.interviewDate, 10)
-      if (!learnerName || !grade || !guardianName || !/^254[17]\d{8}$/.test(guardianPhone) || !interviewDate) return send(response, 400, { error: 'Enter the learner, grade, interview date, and a valid Kenyan guardian phone number.' })
+      if (!learnerName || !grade || !interviewDate || (!fatherComplete && !motherComplete)) return send(response, 400, { error: 'Enter the learner, grade, interview date, and at least one parent with both a name and valid Kenyan phone number.' })
       const year = new Date().getFullYear()
       const sequence = data.admissionInterviews.filter(item => String(item.createdAt || '').startsWith(String(year))).length + 1
       const feeAmount = /^baby class$/i.test(grade) ? 500 : 1000
@@ -2125,7 +2127,7 @@ const server = createServer(async (request, response) => {
         id:`interview-${Date.now()}`,
         candidateNumber:`SD/INT/${year}/${String(sequence).padStart(4, '0')}`,
         learnerName, grade, dateOfBirth:text(input.dateOfBirth, 10), gender:text(input.gender, 20), formerSchool:text(input.formerSchool, 100),
-        guardianName, guardianPhone, interviewDate, feeAmount, feeStatus:'Unpaid', status:'Awaiting payment',
+        fatherName, fatherPhone:fatherComplete ? fatherPhone : '', motherName, motherPhone:motherComplete ? motherPhone : '', guardianName, guardianPhone, interviewDate, feeAmount, feeStatus:'Unpaid', status:'Awaiting payment',
         paymentMethod:'', paymentReference:'', receiptNumber:'', paidAt:null, score:null, remarks:'', decision:'Pending', decisionBy:'', decisionAt:null,
         admissionId:'', createdAt:new Date().toISOString(), createdBy:request.account.name
       }
@@ -2158,7 +2160,8 @@ const server = createServer(async (request, response) => {
         if (candidate.decision !== 'Passed') return send(response, 400, { error: 'Only a candidate marked Passed can proceed to admission.' })
         if (candidate.admissionId) return send(response, 400, { error: 'This candidate has already been transferred to admissions.' })
         const createdAt = new Date().toISOString()
-        const application = { id:`admission-${Date.now()}`, admissionNumber:nextAdmissionNumber(createdAt, data.admissions), learnerName:candidate.learnerName, grade:candidate.grade, residency:'Day scholar', admissionFee:candidate.feeAmount, admissionFeeStatus:'Paid', guardianName:candidate.guardianName, guardianPhone:candidate.guardianPhone, relationship:'Parent / guardian', guardians:[{ name:candidate.guardianName, phone:candidate.guardianPhone, relationship:'Parent / guardian' }], formerSchool:candidate.formerSchool, dateOfBirth:candidate.dateOfBirth, gender:candidate.gender, medicalNotes:'', birthCertificateProvided:false, status:'Application received', interviewCandidateNumber:candidate.candidateNumber, createdAt }
+        const guardians = [{ name:candidate.fatherName, phone:candidate.fatherPhone, relationship:'Father' }, { name:candidate.motherName, phone:candidate.motherPhone, relationship:'Mother / guardian' }].filter(item => item.name || item.phone)
+        const application = { id:`admission-${Date.now()}`, admissionNumber:nextAdmissionNumber(createdAt, data.admissions), learnerName:candidate.learnerName, grade:candidate.grade, residency:'Day scholar', admissionFee:candidate.feeAmount, admissionFeeStatus:'Paid', fatherName:candidate.fatherName||'', fatherPhone:candidate.fatherPhone||'', motherName:candidate.motherName||'', motherPhone:candidate.motherPhone||'', guardianName:candidate.guardianName, guardianPhone:candidate.guardianPhone, relationship:candidate.motherName?'Mother / guardian':'Father / guardian', guardians, formerSchool:candidate.formerSchool, dateOfBirth:candidate.dateOfBirth, gender:candidate.gender, medicalNotes:'', birthCertificateProvided:false, status:'Application received', interviewCandidateNumber:candidate.candidateNumber, createdAt }
         data.admissions.unshift(application)
         Object.assign(candidate, { status:'Admitted', admissionId:application.id, admissionNumber:application.admissionNumber, admittedAt:createdAt, admittedBy:request.account.name })
       } else return send(response, 400, { error: 'Choose a valid interview action.' })
