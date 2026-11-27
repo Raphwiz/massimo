@@ -2008,11 +2008,28 @@ const server = createServer(async (request, response) => {
       const start = text(url.searchParams.get('start'), 10)
       const end = text(url.searchParams.get('end'), 10)
       const isInPeriod = receipt => {
-        const date = receipt.issuedAt.slice(0, 10)
+        const date = String(receipt.paymentDate || receipt.issuedAt || '').slice(0, 10)
         return (!start || date >= start) && (!end || date <= end)
       }
       const receipts = data.receipts.filter(isInPeriod)
       const totalCollected = receipts.reduce((total, receipt) => total + Number(receipt.amount || 0), 0)
+      const expenses = data.cashbookEntries.filter(entry => {
+        const date = String(entry.date || entry.createdAt || '').slice(0, 10)
+        return entry.type === 'Cash out' && (!start || date >= start) && (!end || date <= end)
+      })
+      const totalExpenses = expenses.reduce((total, entry) => total + Number(entry.amount || 0), 0)
+      const accountNames = [...schoolExpenseAccounts, 'Account not assigned']
+      const accountSummaries = accountNames.map(account => {
+        const accountReceipts = receipts.filter(receipt => (receipt.receivedAccount || 'Account not assigned') === account)
+        const accountExpenses = expenses.filter(entry => (entry.sourceAccount || 'Account not assigned') === account)
+        const collected = accountReceipts.reduce((total, receipt) => total + Number(receipt.amount || 0), 0)
+        const spent = accountExpenses.reduce((total, entry) => total + Number(entry.amount || 0), 0)
+        return { account, collected, expenses: spent, netMovement: collected - spent, receiptCount: accountReceipts.length, expenseCount: accountExpenses.length }
+      }).filter(item => item.account !== 'Account not assigned' || item.receiptCount || item.expenseCount)
+      const accountLedger = [
+        ...receipts.map(receipt => ({ id: receipt.id, date: receipt.paymentDate || String(receipt.issuedAt || '').slice(0, 10), account: receipt.receivedAccount || 'Account not assigned', type: 'Learner payment', party: receipt.learnerName, reference: receipt.receiptNumber || receipt.paymentReference, moneyIn: Number(receipt.amount || 0), moneyOut: 0 })),
+        ...expenses.map(entry => ({ id: entry.id, date: entry.date || String(entry.createdAt || '').slice(0, 10), account: entry.sourceAccount || 'Account not assigned', type: entry.category || 'Expense', party: entry.payee || entry.description, reference: entry.reference || '—', moneyIn: 0, moneyOut: Number(entry.amount || 0) }))
+      ].sort((a, b) => String(b.date).localeCompare(String(a.date)))
       const channels = ['M-Pesa', 'Equity Bank', 'DTB Bank', 'Trans Nation SACCO', 'Cash']
       const byMethod = [...channels, ...[...new Set(receipts.map(receipt => receipt.paymentMethod).filter(method => method && !channels.includes(method)))]] .map(method => {
         const methodReceipts = receipts.filter(receipt => receipt.paymentMethod === method)
@@ -2030,7 +2047,12 @@ const server = createServer(async (request, response) => {
         start: start || null,
         end: end || null,
         totalCollected,
+        totalExpenses,
+        netMovement: totalCollected - totalExpenses,
         receiptCount: receipts.length,
+        expenseCount: expenses.length,
+        accountSummaries,
+        accountLedger,
         byMethod,
         byClass: [...classMap.values()].sort((a, b) => b.total - a.total),
         unmatchedMpesaCount: unmatchedMpesa.length,
@@ -2589,11 +2611,12 @@ const server = createServer(async (request, response) => {
       const learner = data.admissions.find(application => application.id === admissionId)
       const amount = Number(input.amount)
       const paymentMethod = text(input.paymentMethod, 30)
+      const receivedAccount = text(input.receivedAccount, 140)
       const paymentReference = text(input.paymentReference, 80)
       const paymentDate = text(input.paymentDate, 10)
       if (!learner) return send(response, 404, { error: 'Select a valid learner account before issuing the receipt.' })
       if (!Number.isFinite(amount) || amount <= 0) return send(response, 400, { error: 'Enter a valid payment amount.' })
-      if (!paymentMethod || !paymentReference) return send(response, 400, { error: 'Payment method and reference are required.' })
+      if (!paymentMethod || !paymentReference || !schoolExpenseAccounts.has(receivedAccount)) return send(response, 400, { error: 'Payment method, receiving school account and reference are required.' })
       if (data.receipts.some(receipt => String(receipt.paymentMethod || '').toLowerCase() === paymentMethod.toLowerCase() && String(receipt.paymentReference || '').toLowerCase() === paymentReference.toLowerCase())) return send(response, 409, { error: 'This payment reference has already been confirmed. Check the saved receipts before recording it again.' })
       const financeBefore = currentFeeSummary(data, learner)
       const arrearsDue = financeBefore.importedBalance ? Math.max(0, Number(financeBefore.balance || 0)) : 0
@@ -2618,6 +2641,7 @@ const server = createServer(async (request, response) => {
         arrearsBeforePayment: arrearsDue,
         arrearsApplied,
         paymentMethod,
+        receivedAccount,
         paymentReference,
         paymentDate: /^\d{4}-\d{2}-\d{2}$/.test(paymentDate) ? paymentDate : issuedAt.slice(0, 10),
         confirmationSource: 'Manual school notification',
@@ -2626,7 +2650,7 @@ const server = createServer(async (request, response) => {
       }
       data.receipts.unshift(receipt)
       receipt.remainingBalance = currentFeeSummary(data, learner).balance
-      addFinanceAudit(data,request,'Confirmed','Manual payment',receipt.id,`${receipt.receiptNumber} · ${receipt.learnerName} · ${money(amount)} · ${paymentMethod} · ${paymentReference}`)
+      addFinanceAudit(data,request,'Confirmed','Manual payment',receipt.id,`${receipt.receiptNumber} · ${receipt.learnerName} · ${money(amount)} · ${paymentMethod} · ${receivedAccount} · ${paymentReference}`)
       await saveData(data)
       return send(response, 201, receipt)
     }
@@ -2636,9 +2660,10 @@ const server = createServer(async (request, response) => {
       const transactionCode = text(input.transactionCode, 30).toUpperCase()
       const senderPhone = normalisePhone(input.senderPhone)
       const amount = Number(input.amount)
-      if (!transactionCode || !senderPhone || !Number.isFinite(amount) || amount <= 0) return send(response, 400, { error: 'M-Pesa code, sender phone, and valid amount are required.' })
+      const receivedAccount = text(input.receivedAccount, 140)
+      if (!transactionCode || !senderPhone || !Number.isFinite(amount) || amount <= 0 || !schoolExpenseAccounts.has(receivedAccount)) return send(response, 400, { error: 'M-Pesa code, sender phone, receiving school account and valid amount are required.' })
       if (data.mpesaTransactions.some(transaction => transaction.transactionCode === transactionCode)) return send(response, 400, { error: 'That M-Pesa transaction code has already been recorded.' })
-      const transaction = { id: `mpesa-${Date.now()}`, transactionCode, senderPhone, amount, receivedAt: new Date().toISOString(), status: 'Awaiting match' }
+      const transaction = { id: `mpesa-${Date.now()}`, transactionCode, senderPhone, amount, receivedAccount, receivedAt: new Date().toISOString(), status: 'Awaiting match' }
       data.mpesaTransactions.unshift(transaction)
       addFinanceAudit(data,request,'Created','M-Pesa confirmation',transaction.id,`${transactionCode} · ${money(amount)} · awaiting match`)
       await saveData(data)
@@ -2687,6 +2712,7 @@ const server = createServer(async (request, response) => {
         guardianPhone: learner.guardianPhone,
         amount: transaction.amount,
         paymentMethod: 'M-Pesa',
+        receivedAccount: transaction.receivedAccount || 'Account not assigned',
         paymentReference: transaction.transactionCode,
         issuedAt: reconciledAt
       }

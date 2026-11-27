@@ -1,0 +1,14 @@
+.account-audit-metrics{grid-template-columns:repeat(4,minmax(0,1fr))}
+.account-audit-summary,.account-ledger{margin-top:18px;overflow:hidden}
+.account-audit-cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;padding:18px}
+.account-audit-cards article{border:1px solid #d8e4f0;border-radius:14px;background:linear-gradient(145deg,#fff,#f6faff);padding:16px;box-shadow:0 8px 24px rgba(23,54,98,.06)}
+.account-audit-cards article.unassigned{border-color:#e7c66f;background:#fffaf0}
+.account-audit-cards header{display:flex;min-height:48px;flex-direction:column;gap:5px;border-bottom:1px solid #e1eaf3;padding-bottom:11px}
+.account-audit-cards header strong{color:#173662;font-size:14px;line-height:1.35}.account-audit-cards header small{color:#687f99}
+.account-audit-cards dl{display:grid;gap:8px;margin:12px 0 0}.account-audit-cards dl div{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.account-audit-cards dt{color:#687f99;font-size:12px}.account-audit-cards dd{margin:0;color:#173662;font-weight:800;font-size:13px}
+.account-audit-cards dl div:last-child{border-top:1px solid #dfe8f1;padding-top:9px}.account-audit-cards dl div:last-child dd{color:#1f7044}
+.account-ledger .panel-heading label{display:flex;align-items:center;gap:10px;color:#536b84;font-size:12px;font-weight:700}
+.account-ledger .panel-heading select{min-width:270px;border:1px solid #c9d9ea;border-radius:9px;background:#fff;padding:9px 34px 9px 11px;color:#173662}
+@media(max-width:1050px){.account-audit-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.account-audit-cards{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:700px){.account-audit-metrics,.account-audit-cards{grid-template-columns:1fr}.account-ledger .panel-heading{align-items:flex-start;flex-direction:column}.account-ledger .panel-heading label,.account-ledger .panel-heading select{width:100%;min-width:0}}
