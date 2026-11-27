@@ -595,6 +595,7 @@ function addFinanceAudit(data, request, action, recordType, recordId, detail = '
 function addAccountAudit(data, action, account, detail = '') { data.accountAudit ??= []; data.accountAudit.unshift({ id:`audit-${Date.now()}-${Math.random().toString(36).slice(2,7)}`, action, accountId:account?.id || '', accountName:account?.name || '', by:account?.name || 'System', detail, createdAt:new Date().toISOString() }) }
 
 const money = value => `KES ${Number(value || 0).toLocaleString('en-KE')}`
+const receiptVoteHeads = new Set(['Tuition / School fees','Boarding fees','Meals / Lunch programme','Transport','Examinations / Assessments','Activity, Sports & Trips','Development / PTA projects','ICT / Computer','Books, Stationery & Learning materials','Medical / Insurance','Uniform','Damages / Lost items','Other approved charge'])
 const safePdfName = value => String(value || 'learner').replace(/[^a-z0-9_-]+/gi, '_').replace(/^_+|_+$/g, '')
 async function createClassListPdf(data, schoolClass) {
   const learners = data.admissions
@@ -858,13 +859,22 @@ async function createReceiptPdf(receipt) {
   document.fillColor('#173662').font('Helvetica-Bold').fontSize(8.5).text('Amount received', 46, 281).text(money(receipt.amount), 254, 281, { width: 120, align: 'right' })
   document.rect(36, 299, 348, 22).fill('#E6F4E9')
   document.fillColor('#1F7044').font('Helvetica-Bold').fontSize(8.5).text('Remaining balance after payment', 46, 306).text(balanceText(receipt.remainingBalance), 254, 306, { width: 120, align: 'right' })
-  heading('Payment record', 342)
-  document.fillColor('#536B84').font('Helvetica-Bold').fontSize(7).text('CHANNEL', 36, 360).text('REFERENCE', 151, 360).text('SERVED BY', 272, 360)
-  document.moveTo(36, 371).lineTo(384, 371).stroke('#B8C9DA')
-  document.fillColor('#173662').font('Helvetica').fontSize(8).text(receipt.paymentMethod || 'Not recorded', 36, 379, { width: 105 }).text(receipt.paymentReference || 'Not recorded', 151, 379, { width: 111 }).text(receipt.servedBy || 'School office', 272, 379, { width: 112 })
-  document.moveTo(36, 402).lineTo(384, 402).stroke('#D8A20C')
-  document.fillColor('#173662').font('Helvetica-Bold').fontSize(8.8).text(`Served by ${receipt.servedBy || 'School office'}. Thank you.`, 36, 416, { width: 348, align: 'center' })
-  document.fillColor('#536B84').font('Helvetica').fontSize(6.8).text('This is a computer-generated school-fee receipt. Keep it for account verification.', 36, 432, { width: 348, align: 'center' }); document.end(); return finished
+  heading('Payment allocation', 338)
+  document.fillColor('#536B84').font('Helvetica-Bold').fontSize(7).text('VOTE HEAD / PARTICULAR', 36, 356).text('AMOUNT', 286, 356, { width: 98, align: 'right' })
+  document.moveTo(36, 367).lineTo(384, 367).stroke('#B8C9DA')
+  let allocationY = 374
+  const allocations = Array.isArray(receipt.allocations) && receipt.allocations.length ? receipt.allocations : [{ voteHead:'School fees', amount:receipt.amount }]
+  allocations.forEach(item => { const label=item.note?`${item.voteHead} — ${item.note}`:item.voteHead; document.fillColor('#173662').font('Helvetica').fontSize(7.6).text(label, 36, allocationY, { width: 238 }).text(money(item.amount), 286, allocationY, { width: 98, align:'right' }); allocationY += 14 })
+  document.moveTo(36, allocationY + 1).lineTo(384, allocationY + 1).stroke('#D8A20C')
+  document.font('Helvetica-Bold').fontSize(8).text('TOTAL', 36, allocationY + 8).text(money(receipt.amount), 286, allocationY + 8, { width:98, align:'right' })
+  const paymentY = allocationY + 34
+  heading('Payment record', paymentY)
+  document.fillColor('#536B84').font('Helvetica-Bold').fontSize(7).text('CHANNEL', 36, paymentY + 18).text('REFERENCE', 151, paymentY + 18).text('SERVED BY', 272, paymentY + 18)
+  document.moveTo(36, paymentY + 29).lineTo(384, paymentY + 29).stroke('#B8C9DA')
+  document.fillColor('#173662').font('Helvetica').fontSize(8).text(receipt.paymentMethod || 'Not recorded', 36, paymentY + 37, { width: 105 }).text(receipt.paymentReference || 'Not recorded', 151, paymentY + 37, { width: 111 }).text(receipt.servedBy || 'School office', 272, paymentY + 37, { width: 112 })
+  document.moveTo(36, paymentY + 60).lineTo(384, paymentY + 60).stroke('#D8A20C')
+  document.fillColor('#173662').font('Helvetica-Bold').fontSize(8.8).text(`Served by ${receipt.servedBy || 'School office'}. Thank you.`, 36, paymentY + 72, { width: 348, align: 'center' })
+  document.fillColor('#536B84').font('Helvetica').fontSize(6.8).text('This is a computer-generated school-fee receipt. Keep it for account verification.', 36, paymentY + 88, { width: 348, align: 'center' }); document.end(); return finished
 }
 
 function receiptForPrint(data, receipt, servedBy) {
@@ -2115,6 +2125,14 @@ const server = createServer(async (request, response) => {
       if (!Number.isFinite(amount) || amount <= 0) return send(response, 400, { error: 'Enter a valid payment amount.' })
       if (!paymentMethod || !paymentReference) return send(response, 400, { error: 'Payment method and reference are required.' })
       if (data.receipts.some(receipt => String(receipt.paymentMethod || '').toLowerCase() === paymentMethod.toLowerCase() && String(receipt.paymentReference || '').toLowerCase() === paymentReference.toLowerCase())) return send(response, 409, { error: 'This payment reference has already been confirmed. Check the saved receipts before recording it again.' })
+      const financeBefore = currentFeeSummary(data, learner)
+      const arrearsDue = financeBefore.importedBalance ? Math.max(0, Number(financeBefore.balance || 0)) : 0
+      const arrearsApplied = Math.min(amount, arrearsDue)
+      const manualAllocations = (Array.isArray(input.allocations) ? input.allocations : []).map(item => ({ voteHead:text(item.voteHead,80), amount:Number(item.amount), note:text(item.note,100) })).filter(item => receiptVoteHeads.has(item.voteHead) && Number.isFinite(item.amount) && item.amount > 0)
+      const manuallyAllocated = manualAllocations.reduce((sum,item)=>sum+item.amount,0)
+      const allocationRemainder = Math.round((amount-arrearsApplied-manuallyAllocated)*100)/100
+      if (Math.abs(allocationRemainder) > 0.001) return send(response,400,{error:`Allocate the remaining ${money(Math.max(0,amount-arrearsApplied))} to one or more vote heads before confirming this receipt.`})
+      const allocations = [...(arrearsApplied > 0 ? [{ voteHead:'Arrears', amount:arrearsApplied, automatic:true }] : []), ...manualAllocations]
       const issuedAt = new Date().toISOString()
       const receipt = {
         id: `receipt-${Date.now()}`,
@@ -2126,6 +2144,9 @@ const server = createServer(async (request, response) => {
         guardianName: learner.guardianName,
         guardianPhone: learner.guardianPhone,
         amount,
+        allocations,
+        arrearsBeforePayment: arrearsDue,
+        arrearsApplied,
         paymentMethod,
         paymentReference,
         paymentDate: /^\d{4}-\d{2}-\d{2}$/.test(paymentDate) ? paymentDate : issuedAt.slice(0, 10),
