@@ -374,9 +374,6 @@ function CashbookPage() {
   const [method, setMethod] = useState("Cash");
   const schoolAccounts = [
     "School Cash",
-    "Equity Paybill 247247 · A/C 803434",
-    "DTB Paybill 516600 · A/C 808616",
-    "Trans Nation Paybill 507900 · A/C 9000482",
     "Equity Bank Meru · A/C 0140296813439",
     "DTB Bank Meru · A/C 0259364001",
     "Trans Nation SACCO · A/C 68260900048201",

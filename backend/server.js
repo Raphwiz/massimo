@@ -431,7 +431,7 @@ function ensureSystemAdminAccount(data) {
 }
 
 const allowedDocumentMimeTypes = new Set(['application/pdf', 'image/jpeg', 'image/png'])
-const schoolExpenseAccounts = new Set(['School Cash', 'Equity Paybill 247247 · A/C 803434', 'DTB Paybill 516600 · A/C 808616', 'Trans Nation Paybill 507900 · A/C 9000482', 'Equity Bank Meru · A/C 0140296813439', 'DTB Bank Meru · A/C 0259364001', 'Trans Nation SACCO · A/C 68260900048201', 'Transport · Trans Nation Paybill 507900 · A/C 9000425'])
+const schoolExpenseAccounts = new Set(['School Cash', 'Equity Bank Meru · A/C 0140296813439', 'DTB Bank Meru · A/C 0259364001', 'Trans Nation SACCO · A/C 68260900048201', 'Transport · Trans Nation Paybill 507900 · A/C 9000425'])
 const schoolExpenseCategories = new Set(['Salaries', 'Kitchen', 'Drugs / Medical', 'Electricity', 'Repairs & Maintenance', 'Fuel / Insurance', 'School Activities', 'Examinations', 'Equipment Purchase', 'Stationery', 'Facilitation', 'Remedials', 'Education Day', 'Chickens', 'Farm', 'Other'])
 const documentTypes = new Set(['Birth certificate', 'Transfer letter', 'Medical form', 'Passport photograph', 'Admission form', 'Other supporting document'])
 const noticeAudiences = new Set(['All parents and guardians', 'Specific grade parents and guardians', 'All staff', 'All portal users'])
