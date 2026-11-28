@@ -1117,7 +1117,7 @@ const server = createServer(async (request, response) => {
       await saveData(data)
       return send(response, 200, { status: 'password updated' })
     }
-    if (request.method === 'GET' && url.pathname === '/api/system-admin/overview') return send(response, 200, { accounts: { total: data.accounts.length, active: data.accounts.filter(account => account.active !== false).length, pendingActivation: data.accounts.filter(account => account.activationExpiresAt && Date.parse(account.activationExpiresAt) > Date.now()).length }, integrations: [{ name: 'M-Pesa Daraja', configured: Boolean(process.env.MPESA_CONSUMER_KEY && process.env.MPESA_CONSUMER_SECRET && process.env.MPESA_PASSKEY) }, { name: 'BlessedTexts SMS', configured: Boolean(process.env.BLESSEDTEXTS_API_KEY && process.env.SMS_SENDER_ID) }, { name: 'School email', configured: Boolean(process.env.SMTP_HOST && process.env.SMTP_USER) }], security: { secureCookies: isProduction, allowedOrigins: allowedOrigins.size, twoFactorAuthentication: false } })
+    if (request.method === 'GET' && url.pathname === '/api/system-admin/overview') return send(response, 200, { accounts: { total: data.accounts.length, active: data.accounts.filter(account => account.active !== false).length, pendingActivation: data.accounts.filter(account => account.activationExpiresAt && Date.parse(account.activationExpiresAt) > Date.now()).length }, integrations: [{ name: 'BlessedTexts SMS', configured: Boolean(process.env.BLESSEDTEXTS_API_KEY && process.env.SMS_SENDER_ID) }, { name: 'School email', configured: Boolean(process.env.SMTP_HOST && process.env.SMTP_USER) }], security: { secureCookies: isProduction, allowedOrigins: allowedOrigins.size, twoFactorAuthentication: false } })
     if (request.method === 'GET' && url.pathname === '/api/system-admin/logs') { const accountLogs=(data.accountAudit||[]).map(item=>({ id:`account-${item.id}`, area:'System access', action:item.action||'Account activity', detail:item.detail||item.accountName||'', by:item.by||item.performedBy||'System', createdAt:item.createdAt })); const financeLogs=(data.financeAudit||[]).map(item=>({ id:`finance-${item.id}`, area:'Finance', action:`${item.action||'Updated'} ${item.recordType||'record'}`, detail:item.detail||'', by:item.by||'System', createdAt:item.createdAt })); return send(response,200,[...accountLogs,...financeLogs].sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||''))).slice(0,300)) }
     if (request.method === 'GET' && url.pathname === '/api/system-admin/backup/status') { const documents=await Promise.all((data.documentRecords||[]).map(async item=>{try{return await stat(join(documentUploadDirectory,item.storedFileName))}catch{return null}})); const dataBytes=Buffer.byteLength(JSON.stringify(data)); const documentBytes=documents.reduce((total,item)=>total+Number(item?.size||0),0); return send(response,200,{generatedAt:new Date().toISOString(),dataBytes,documentBytes,totalBytes:dataBytes+documentBytes,documentsIncluded:documents.filter(Boolean).length,documentsMissing:documents.filter(item=>!item).length}) }
     if (request.method === 'GET' && url.pathname === '/api/system-admin/backup/download') { const generatedAt=new Date().toISOString(); const documentRecords=data.documentRecords||[]; const documents=await Promise.all(documentRecords.map(async item=>{try{return {record:item,content:await readFile(join(documentUploadDirectory,item.storedFileName))}}catch{return null}})); const availableDocuments=documents.filter(Boolean); const manifest={format:'st-dorothy-logical-backup-v1',generatedAt,documentsIncluded:availableDocuments.length,documentsMissing:documentRecords.length-availableDocuments.length,restoreNote:'This archive contains the complete school application state and uploaded learner documents. Keep it encrypted. Restore only with the portal technical administrator.'}; const zipName=`st-dorothy-school-backup_${generatedAt.slice(0,10)}.zip`; response.writeHead(200,{'Content-Type':'application/zip','Content-Disposition':`attachment; filename="${zipName}"`,'Cache-Control':'no-store'}); const archive=new ZipArchive({zlib:{level:9}}); archive.on('error',error=>response.destroy(error)); archive.pipe(response); archive.append(Buffer.from(JSON.stringify(data,null,2)),{name:'school-data.json'}); archive.append(Buffer.from(JSON.stringify(manifest,null,2)),{name:'backup-manifest.json'}); archive.append(Buffer.from('St. Dorothy School Massimo backup\n\nThis archive contains school-data.json and uploaded learner documents. Save it only on an encrypted SSD or trusted encrypted storage. Contact the portal technical administrator before restoring.\n'),{name:'README.txt'}); for(const item of availableDocuments) archive.append(item.content,{name:`learner-documents/${safeFileName(item.record.storedFileName)}`}); await archive.finalize(); return }
@@ -1569,7 +1569,7 @@ const server = createServer(async (request, response) => {
       const bank = text(input.bank, 80);
       const chequeNumber = text(input.chequeNumber, 80);
       if (
-        !["Cash", "M-Pesa", "Cheque"].includes(paymentMethod) ||
+        !["Cash", "Bank transfer", "Cheque"].includes(paymentMethod) ||
         !Number.isFinite(amount) ||
         amount <= 0 ||
         !payee ||
@@ -1581,18 +1581,12 @@ const server = createServer(async (request, response) => {
           error:
             "Choose a valid expense category, payment method and school source account, then enter the payee, description and amount.",
         });
-      if (paymentMethod === "M-Pesa" && !mpesaReference)
-        return send(response, 400, {
-          error: "Enter the M-Pesa transaction reference.",
-        });
       if (paymentMethod === "Cheque" && (!bank || !chequeNumber))
         return send(response, 400, {
           error: "Enter the cheque bank and cheque number.",
         });
       const reference =
-        paymentMethod === "M-Pesa"
-          ? mpesaReference
-          : paymentMethod === "Cheque"
+        paymentMethod === "Cheque"
             ? chequeNumber
             : text(input.reference, 80);
       const entry = {
@@ -2030,7 +2024,7 @@ const server = createServer(async (request, response) => {
         ...receipts.map(receipt => ({ id: receipt.id, date: receipt.paymentDate || String(receipt.issuedAt || '').slice(0, 10), account: receipt.receivedAccount || 'Account not assigned', type: 'Learner payment', party: receipt.learnerName, reference: receipt.receiptNumber || receipt.paymentReference, moneyIn: Number(receipt.amount || 0), moneyOut: 0 })),
         ...expenses.map(entry => ({ id: entry.id, date: entry.date || String(entry.createdAt || '').slice(0, 10), account: entry.sourceAccount || 'Account not assigned', type: entry.category || 'Expense', party: entry.payee || entry.description, reference: entry.reference || '—', moneyIn: 0, moneyOut: Number(entry.amount || 0) }))
       ].sort((a, b) => String(b.date).localeCompare(String(a.date)))
-      const channels = ['M-Pesa', 'Equity Bank', 'DTB Bank', 'Trans Nation SACCO', 'Cash']
+      const channels = ['Equity Bank', 'DTB Bank', 'Trans Nation SACCO', 'Cash']
       const byMethod = [...channels, ...[...new Set(receipts.map(receipt => receipt.paymentMethod).filter(method => method && !channels.includes(method)))]] .map(method => {
         const methodReceipts = receipts.filter(receipt => receipt.paymentMethod === method)
         return { method, count: methodReceipts.length, total: methodReceipts.reduce((total, receipt) => total + Number(receipt.amount || 0), 0) }
