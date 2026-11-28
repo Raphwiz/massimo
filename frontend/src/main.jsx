@@ -9,6 +9,7 @@ import './styles.css'
 import './additions.css'
 import './finance.css'
 import './account-audit.css'
+import './sponsorships.css'
 import './secretary.css'
 import './office-pages.css'
 import './sms-search.css'
@@ -34,7 +35,7 @@ import './teacher-dashboard.css'
 import './headteacher-dashboard.css'
 import './account-security.css'
 import './admission-interviews.css'
-import { activatePortalAccount, attendanceWorkbookUrl, boarderRegisterPdfUrl, changePortalPassword, classListPdfUrl, classListWorkbookUrl, createAdmission, createAssessment, createBankDeposit, createCalendarEvent, createCashbookEntry, createDocument, createFeeAdjustment, createFeeStructure, createInternalMessage, createLeaveRequest, createLessonPlan, createMpesaTransaction, createNotice, createParentMessage, createParentPaymentReport, createParentPortal, createPortalAccount, createPromotion, createReceipt, createSchoolClass, createSmsMessage, createSmsTopup, createStaff, createSubject, createTeacherAssignment, createTimetableEntry, decideFinanceApproval, defaulterListPdfUrl, deletePortalAccount, deleteSchoolClass, expensesPdfUrl, expensesWorkbookUrl, feeStatementPdfUrl, feeStatementsBulkUrl, feeStatementsWorkbookUrl, financeOperationsWorkbookUrl, getAcademics, getAdmissions, getAssessmentMarks, getAttendance, getBankDeposits, getBudgetSummary, getCalendarEvents, getCashbook, getClassPlacements, getDefaulters, getDocuments, getFeeAdjustments, getFeeStatement, getFeeStructures, getFinanceApprovalRequests, getFinanceAudit, getFinanceLearners, getFinanceReport, getGoLivePreview, getHeadteacherAttendance, getHeadteacherDashboard, getInternalMessages, getLessonPlans, getMpesaTransactions, getNotices, getParentLearners, getParentMessages, getPortalAccounts, getPortalSession, getPromotions, getReceipts, getSchoolClasses, getSmsMessages, getSmsWallet, getStaff, getStaffAttendance, getSystemAdminOverview, getTeacherDashboard, getWebsiteNotices, receiptPdfUrl, updatePortalAccountRole, loginPortal, logoutPortal, reconcileMpesaTransaction, resetPortalAccount, runGoLiveReset, saveAssessmentMarks, saveAttendance, saveClassPlacement, saveStaffAttendance, setPortalAccountStatus, staffListWorkbookUrl, updateAdmission, updateLessonPlan, updateNotice, updateSchoolClass, updateSubject } from './api'
+import { activatePortalAccount, attendanceWorkbookUrl, boarderRegisterPdfUrl, changePortalPassword, classListPdfUrl, classListWorkbookUrl, createAdmission, createAssessment, createBankDeposit, createCalendarEvent, createCashbookEntry, createDocument, createFeeAdjustment, createFeeStructure, createInternalMessage, createLeaveRequest, createLessonPlan, createMpesaTransaction, createNotice, createParentMessage, createParentPaymentReport, createParentPortal, createPortalAccount, createPromotion, createReceipt, createSchoolClass, createSmsMessage, createSmsTopup, createStaff, createSubject, createTeacherAssignment, createTimetableEntry, decideFinanceApproval, defaulterListPdfUrl, deletePortalAccount, deleteSchoolClass, expensesPdfUrl, expensesWorkbookUrl, feeStatementPdfUrl, feeStatementsBulkUrl, feeStatementsWorkbookUrl, financeOperationsWorkbookUrl, getAcademics, getAdmissions, getAssessmentMarks, getAttendance, getBankDeposits, getBudgetSummary, getCalendarEvents, getCashbook, getClassPlacements, getDefaulters, getDocuments, getFeeAdjustments, getFeeStatement, getFeeStructures, getFinanceApprovalRequests, getFinanceAudit, getFinanceLearners, getFinanceReport, getGoLivePreview, getHeadteacherAttendance, getHeadteacherDashboard, getInternalMessages, getLessonPlans, getMpesaTransactions, getNotices, getParentLearners, getParentMessages, getPortalAccounts, getPortalSession, getPromotions, getReceipts, getSchoolClasses, getSmsMessages, getSmsWallet, getStaff, getStaffAttendance, getSystemAdminOverview, getTeacherDashboard, getWebsiteNotices, receiptPdfUrl, reverseFeeAdjustment, sponsorshipWorkbookUrl, updatePortalAccountRole, loginPortal, logoutPortal, reconcileMpesaTransaction, resetPortalAccount, runGoLiveReset, saveAssessmentMarks, saveAttendance, saveClassPlacement, saveStaffAttendance, setPortalAccountStatus, staffListWorkbookUrl, updateAdmission, updateLessonPlan, updateNotice, updateSchoolClass, updateSubject } from './api'
 
 import { decideLeaveRequest, getHeadteacherAcademics, getHeadteacherLearners, getLeaveRequests } from './api'
 import { createAdmissionInterview, getAdmissionInterviews, updateAdmissionInterview } from './api'
@@ -147,7 +148,7 @@ function Dashboard({ onExit, onSwitchRole, role = 'headteacher', profile, calend
   const isSecretary = role === 'secretary'
   const isParent = role === 'parent'
   const teacherNav = [['Dashboard', LayoutDashboard], ['My class', Users], ['Attendance', ClipboardCheck], ['Assessments', FileText], ['Lesson plans', BookOpen], ['Class reports', LineChart], ['Parent communication', MessageSquare], ['School calendar', CalendarDays]]
-  const bursarNav = [['Dashboard', LayoutDashboard], ['Fee plan', Users], ['Budget vs collection', LineChart], ['Defaulters', Users], ['Expenses', BookOpen], ['Bank deposits', FileText], ['Fee statements', FileText], ['Payments & receipts', ClipboardCheck], ['Finance reports', BookOpen]]
+  const bursarNav = [['Dashboard', LayoutDashboard], ['Fee plan', Users], ['Sponsorships', GraduationCap], ['Budget vs collection', LineChart], ['Defaulters', Users], ['Expenses', BookOpen], ['Bank deposits', FileText], ['Fee statements', FileText], ['Payments & receipts', ClipboardCheck], ['Finance reports', BookOpen]]
 const secretaryNav = [['Dashboard', LayoutDashboard], ['Admission interviews', ClipboardCheck], ['Admissions', UserRound], ['Learner records', Users], ['Boarding update', GraduationCap], ['Payment updates', ClipboardCheck], ['Repeated numbers', FileText], ['Contact updates', UserRound], ['Class setup', GraduationCap], ['Class placement', GraduationCap], ['Class lists', FileText], ['School staff', Users], ['Documents', FileText], ['School calendar', CalendarDays], ['SMS to parents', MessageSquare]]
   const parentNav = [['Dashboard', LayoutDashboard], ['My children', Users], ['Fees & payments', FileText], ['Attendance', ClipboardCheck], ['Results', GraduationCap], ['Notices', Bell], ['Messages', MessageSquare]]
   const items = isTeacher ? teacherNav : isBursar ? bursarNav : isSecretary ? secretaryNav : isParent ? parentNav : navItems
@@ -167,7 +168,7 @@ const secretaryNav = [['Dashboard', LayoutDashboard], ['Admission interviews', C
       <section className="dashboard-content"><div className="page-title"><div><p className="eyebrow">{isTeacher?'Teacher workspace':isBursar?'Restricted finance workspace':isSecretary?'School office workspace':isParent?'Parent portal':'Headteacher overview'}</p><h1>{new Date().getHours()<12?'Good morning':new Date().getHours()<17?'Good afternoon':'Good evening'}, {identity.name.split(' ')[0]}</h1><div className="date-row"><span>Term 2 · 2026</span><LiveDateTime/></div></div><button className="outline-action" onClick={()=>setCalendarOpen(true)}><CalendarDays size={18}/> View calendar</button></div>
       {calendarOpen&&<CalendarOverlay events={calendarEvents} onClose={()=>setCalendarOpen(false)}/>}
       {!isSecretary&&visibleNotices.length>0&&<section className="portal-important-notices"><div><Bell size={18}/><span>Important notices</span></div>{visibleNotices.slice(0,3).map(notice=><article key={notice.id}><strong>{notice.title}</strong><small>{notice.message}</small></article>)}</section>}
-      {isTeacher ? active === 'Attendance' ? <TeacherAttendancePage/> : active === 'Assessments' ? <TeacherAssessmentPage/> : active === 'Lesson plans' ? <TeacherLessonPlansPage/> : active === 'Parent communication' ? <TeacherMessagesPage/> : <TeacherLiveWorkspace page={active} onNavigate={setActive} calendarEvents={calendarEvents}/> : isBursar ? active === 'Fee plan' ? <BursarFeeManagementPage/> : active === 'Budget vs collection' ? <BudgetCollectionPage/> : active === 'Finance audit log' ? <FinanceAuditPage/> : active === 'Defaulters' ? <DefaultersPage/> : active === 'Expenses' ? <CashbookPage/> : active === 'Bank deposits' ? <BankDepositsPage/> : active === 'Fee statements' ? <><FeeStatementsPage/><FeeStatementsBulkDownload/></> : active === 'Payments & receipts' ? <ManualPaymentsPage/> : <BursarContent page={active} onNavigate={setActive}/> : isSecretary ? active === 'Admission interviews' ? <AdmissionInterviewsPage role="secretary"/> : active === 'Payment updates' ? <ManualPaymentsPage secretary/> : <SecretaryContent page={active} onNavigate={setActive} calendarEvents={calendarEvents} onAddCalendarEvent={onAddCalendarEvent}/> : isParent ? active === 'Fees & payments' ? <ParentLiveFeesPage parentPhone={parentPhone} selectedLearnerId={paymentLearnerId}/> : active === 'Attendance' ? <ParentProgressPage parentPhone={parentPhone} mode="attendance"/> : active === 'Results' ? <ParentProgressPage parentPhone={parentPhone} mode="results"/> : <ParentContent page={active} onNavigate={setActive} parentPhone={parentPhone} onPayNow={learnerId=>{setPaymentLearnerId(learnerId);setActive('Fees & payments')}}/> : active === 'Admission interviews' ? <AdmissionInterviewsPage role="headteacher"/> : <HeadteacherContent page={active} onNavigate={setActive} calendarEvents={calendarEvents}/>} 
+      {isTeacher ? active === 'Attendance' ? <TeacherAttendancePage/> : active === 'Assessments' ? <TeacherAssessmentPage/> : active === 'Lesson plans' ? <TeacherLessonPlansPage/> : active === 'Parent communication' ? <TeacherMessagesPage/> : <TeacherLiveWorkspace page={active} onNavigate={setActive} calendarEvents={calendarEvents}/> : isBursar ? active === 'Fee plan' ? <BursarFeeManagementPage/> : active === 'Sponsorships' ? <BursaryAdjustmentsPage/> : active === 'Budget vs collection' ? <BudgetCollectionPage/> : active === 'Finance audit log' ? <FinanceAuditPage/> : active === 'Defaulters' ? <DefaultersPage/> : active === 'Expenses' ? <CashbookPage/> : active === 'Bank deposits' ? <BankDepositsPage/> : active === 'Fee statements' ? <><FeeStatementsPage/><FeeStatementsBulkDownload/></> : active === 'Payments & receipts' ? <ManualPaymentsPage/> : <BursarContent page={active} onNavigate={setActive}/> : isSecretary ? active === 'Admission interviews' ? <AdmissionInterviewsPage role="secretary"/> : active === 'Payment updates' ? <ManualPaymentsPage secretary/> : <SecretaryContent page={active} onNavigate={setActive} calendarEvents={calendarEvents} onAddCalendarEvent={onAddCalendarEvent}/> : isParent ? active === 'Fees & payments' ? <ParentLiveFeesPage parentPhone={parentPhone} selectedLearnerId={paymentLearnerId}/> : active === 'Attendance' ? <ParentProgressPage parentPhone={parentPhone} mode="attendance"/> : active === 'Results' ? <ParentProgressPage parentPhone={parentPhone} mode="results"/> : <ParentContent page={active} onNavigate={setActive} parentPhone={parentPhone} onPayNow={learnerId=>{setPaymentLearnerId(learnerId);setActive('Fees & payments')}}/> : active === 'Admission interviews' ? <AdmissionInterviewsPage role="headteacher"/> : <HeadteacherContent page={active} onNavigate={setActive} calendarEvents={calendarEvents}/>}
       {/* Legacy inline dashboard moved to HeadteacherContent.
       <section className="panel performance"><div className="panel-heading"><h2>Academic performance</h2><span>Average competency progress</span></div><div className="bars">{[['G4',78],['G5',82],['G6',76],['G7',71],['G8',66],['G9',63]].map(([grade,score])=><div className="bar-group" key={grade}><span>{score}%</span><i style={{height:`${score}%`}}/><b>{grade}</b></div>)}</div></section>
       <section className="panel tasks"><div className="panel-heading"><h2>Today’s tasks</h2><a>View all <ChevronRight size={16}/></a></div>{['Review staff attendance','Approve leave requests','Review Grade 8 assessment reports','Parent meeting (Grade 7)'].map((task,index)=><div className="task" key={task}><button aria-label={`Complete ${task}`}/><span>{task}</span><time>{['9:00 AM','10:30 AM','12:00 PM','2:00 PM'][index]}</time></div>)}</section>
@@ -796,11 +797,12 @@ function BudgetCollectionPage() {
   const totals = scoped.reduce(
     (a, row) => ({
       gross: a.gross + row.grossExpected,
+      sponsorship: a.sponsorship + Number(row.bursaryImpact || 0),
       collected: a.collected + row.collected,
       arrears: a.arrears + row.arrears,
       learners: a.learners + row.learnerCount,
     }),
-    { gross: 0, collected: 0, arrears: 0, learners: 0 },
+    { gross: 0, sponsorship: 0, collected: 0, arrears: 0, learners: 0 },
   );
   const selectedPeriod = `${academicYear || "Selected year"}${term ? ` · ${term}` : ""}`;
   return (
@@ -834,8 +836,8 @@ function BudgetCollectionPage() {
             </select>
           </label>
           <p>
-            <b>How this works:</b> fee plan × active learners = expected income.
-            Confirmed payments reduce the outstanding balance.
+            <b>How this works:</b> fee plan × active learners = gross fees.
+            School sponsorships reduce the family obligation, then confirmed payments reduce the outstanding balance.
           </p>
         </form>
       </section>
@@ -848,12 +850,17 @@ function BudgetCollectionPage() {
           </small>
         </article>
         <article>
-          <span>2 · Confirmed payments</span>
+          <span>2 · School sponsorships</span>
+          <strong>{money(totals.sponsorship)}</strong>
+          <small>Approved school support for the selected period</small>
+        </article>
+        <article>
+          <span>3 · Confirmed payments</span>
           <strong>{money(totals.collected)}</strong>
           <small>Only verified receipts are included</small>
         </article>
         <article>
-          <span>3 · Current outstanding</span>
+          <span>4 · Current outstanding</span>
           <strong>{money(totals.arrears)}</strong>
           <small>Balances currently due; includes imported balances</small>
         </article>
@@ -874,7 +881,9 @@ function BudgetCollectionPage() {
           <ChevronRight size={16} />
           <span>× active learners</span>
           <ChevronRight size={16} />
-          <b>Expected income</b>
+          <b>Gross fees</b>
+          <ChevronRight size={16} />
+          <span>− sponsorships</span>
           <ChevronRight size={16} />
           <span>− confirmed payments</span>
           <ChevronRight size={16} />
@@ -888,7 +897,8 @@ function BudgetCollectionPage() {
                   <th>Grade & category</th>
                   <th>Active learners</th>
                   <th>Fee plan / learner</th>
-                  <th>Expected income</th>
+                  <th>Gross fees</th>
+                  <th>Sponsorships</th>
                   <th>Confirmed paid</th>
                   <th>Current outstanding</th>
                 </tr>
@@ -913,6 +923,7 @@ function BudgetCollectionPage() {
                     <td>
                       <b>{money(row.grossExpected)}</b>
                     </td>
+                    <td>{money(row.bursaryImpact)}</td>
                     <td>{money(row.collected)}</td>
                     <td className="budget-arrears">{money(row.arrears)}</td>
                   </tr>
@@ -924,6 +935,7 @@ function BudgetCollectionPage() {
                   <td>{totals.learners}</td>
                   <td>—</td>
                   <td>{money(totals.gross)}</td>
+                  <td>{money(totals.sponsorship)}</td>
                   <td>{money(totals.collected)}</td>
                   <td>{money(totals.arrears)}</td>
                 </tr>
@@ -952,106 +964,25 @@ function BudgetCollectionPage() {
   );
 }
 function BursaryAdjustmentsPage() {
-  const [learners, setLearners] = useState([]);
-  const [adjustments, setAdjustments] = useState([]);
-  const [status, setStatus] = useState("");
-  const [saving, setSaving] = useState(false);
-  const load = () =>
-    Promise.all([getFinanceLearners(), getFeeAdjustments()])
-      .then(([items, records]) => {
-        setLearners(items);
-        setAdjustments(records);
-      })
-      .catch((error) => setStatus(error.message));
-  useEffect(() => {
-    load();
-  }, []);
-  const submit = async (event) => {
-    event.preventDefault();
-    const form = event.currentTarget;
-    const values = new FormData(form);
-    setSaving(true);
-    try {
-      await createFeeAdjustment({
-        admissionId: String(values.get("admissionId")),
-        amount: Number(values.get("amount")),
-        reason: String(values.get("reason")),
-      });
-      form.reset();
-      setStatus(
-        "Bursary request submitted to the Headteacher. The balance will change only after approval.",
-      );
-      await load();
-    } catch (error) {
-      setStatus(error.message);
-    } finally {
-      setSaving(false);
-    }
-  };
-  return (
-    <FinancePage title="Bursaries & discounts" action="Request approval">
-      <section className="panel report-period">
-        <form onSubmit={submit}>
-          <label>
-            Learner
-            <select name="admissionId" required>
-              <option value="">Select learner</option>
-              {learners.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.learnerName} · {item.admissionNumber} ·{" "}
-                  {item.className || item.grade}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            Amount (KES)
-            <input name="amount" type="number" min="1" required />
-          </label>
-          <label>
-            Reason
-            <input
-              name="reason"
-              placeholder="e.g. Parish bursary approval"
-              required
-            />
-          </label>
-          <button disabled={saving}>
-            {saving ? "Submitting…" : "Send for Headteacher approval"}
-          </button>
-        </form>
-      </section>
-      <section className="panel full-panel">
-        <div className="panel-heading">
-          <h2>Approved adjustments</h2>
-          <span>
-            Only Headteacher-approved entries change learner balances and Budget
-            vs Collection.
-          </span>
-        </div>
-        <OfficeTable
-          headers={[
-            "Learner",
-            "Class",
-            "Term",
-            "Amount",
-            "Reason",
-            "Approved by",
-          ]}
-          rows={adjustments.map((item) => [
-            `${item.learnerName} · ${item.admissionNumber}`,
-            item.className,
-            `${item.term} ${item.academicYear}`,
-            `KES ${Number(item.amount || 0).toLocaleString("en-KE")}`,
-            item.reason,
-            item.createdBy,
-          ])}
-        />
-      </section>
-      {status && <p>{status}</p>}
-    </FinancePage>
-  );
+  const [learners,setLearners]=useState([])
+  const [adjustments,setAdjustments]=useState([])
+  const [query,setQuery]=useState('')
+  const [selectedId,setSelectedId]=useState('')
+  const [status,setStatus]=useState('')
+  const [saving,setSaving]=useState(false)
+  const load=()=>Promise.all([getFinanceLearners(),getFeeAdjustments()]).then(([items,records])=>{setLearners(items);setAdjustments(records)}).catch(error=>setStatus(error.message))
+  useEffect(()=>{load()},[])
+  const normalise=value=>String(value||'').replace(/\s+/g,'').toLowerCase()
+  const selected=learners.find(item=>item.id===selectedId)
+  const matches=query.trim()?learners.filter(item=>[item.learnerName,item.admissionNumber,item.guardianPhone,item.className].some(value=>normalise(value).includes(normalise(query)))).slice(0,8):[]
+  const choose=item=>{setSelectedId(item.id);setQuery(`${item.learnerName} · ${item.admissionNumber}`);setStatus('')}
+  const submit=async event=>{event.preventDefault();if(!selected)return setStatus('Find and select a learner first.');const form=new FormData(event.currentTarget);setSaving(true);try{const saved=await createFeeAdjustment({admissionId:selected.id,amount:Number(form.get('amount')),reason:String(form.get('reason'))});setStatus(`Sponsorship of KES ${Number(saved.amount).toLocaleString('en-KE')} applied to ${saved.learnerName} for ${saved.term} ${saved.academicYear}.`);setSelectedId('');setQuery('');event.currentTarget.reset();await load()}catch(error){setStatus(error.message)}finally{setSaving(false)}}
+  const reverse=async item=>{const reason=window.prompt(`Reason for reversing ${item.learnerName}'s sponsorship:`);if(!reason?.trim())return;try{await reverseFeeAdjustment(item.id,reason.trim());setStatus(`Sponsorship for ${item.learnerName} reversed and the fee balance recalculated.`);await load()}catch(error){setStatus(error.message)}}
+  const download=async()=>{try{const response=await fetch(sponsorshipWorkbookUrl(),{credentials:'include',headers:{'X-Portal-Role':window.sessionStorage.getItem('st_dorothy_portal_role')||''}});if(!response.ok)throw new Error('The sponsorship register could not be prepared.');const blob=await response.blob();const url=URL.createObjectURL(blob);const link=document.createElement('a');link.href=url;link.download='st_dorothy_sponsorship_register.xlsx';document.body.appendChild(link);link.click();link.remove();URL.revokeObjectURL(url);setStatus('Sponsorship register downloaded.')}catch(error){setStatus(error.message)}}
+  const active=adjustments.filter(item=>item.status!=='Reversed')
+  return <FinancePage title="School sponsorships"><div className="sponsorship-summary"><article><span>Active sponsored learners</span><strong>{active.length}</strong><small>Current term sponsorship records</small></article><article><span>Active sponsorship value</span><strong>KES {active.reduce((sum,item)=>sum+Number(item.amount||0),0).toLocaleString('en-KE')}</strong><small>Reduces family fee obligations</small></article><article><span>Default award</span><strong>KES 2,000</strong><small>Editable for future programmes</small></article></div><section className="panel sponsorship-entry"><div className="panel-heading"><div><h2>Apply learner sponsorship</h2><span>One active sponsorship per learner in each term. The learner balance updates immediately.</span></div></div><div className="manual-payment-search"><label>Find learner by name, admission number, class or guardian phone<input value={query} onChange={event=>{setQuery(event.target.value);setSelectedId('')}} placeholder="Start typing a learner name or admission number" autoComplete="off"/></label>{query&&!selected&&<div className="statement-matches">{matches.length?matches.map(item=><button type="button" key={item.id} onClick={()=>choose(item)}><strong>{item.learnerName}</strong><span>{item.admissionNumber} · {item.className||item.grade}</span><b>Balance {item.finance.balance===null?'Pending fee plan':`KES ${Number(item.finance.balance||0).toLocaleString('en-KE')}`}</b></button>):<p>No learner matches that search.</p>}</div>}</div>{selected&&<><div className="manual-payment-learner"><div><strong>{selected.learnerName}</strong><span>{selected.admissionNumber} · {selected.className||selected.grade}</span></div><div><small>Current balance</small><b>{selected.finance.balance===null?'Fee plan pending':`KES ${Number(selected.finance.balance||0).toLocaleString('en-KE')}`}</b></div><button type="button" onClick={()=>{setSelectedId('');setQuery('')}}>Change learner</button></div><form onSubmit={submit}><label>Sponsorship amount (KES)<input name="amount" type="number" min="1" defaultValue="2000" required/></label><label>Sponsorship reason<select name="reason" defaultValue="School-sponsored learner"><option>School-sponsored learner</option><option>Financial hardship</option><option>Staff-approved assistance</option><option>Other approved sponsorship</option></select></label><button disabled={saving}>{saving?'Applying sponsorship…':'Apply sponsorship'} <ChevronRight size={16}/></button></form></>}</section><section className="panel full-panel sponsorship-register"><div className="panel-heading"><div><h2>Sponsorship register</h2><span>{adjustments.length} recorded sponsorship{adjustments.length===1?'':'s'} · reversed records remain visible for audit</span></div><div className="class-list-button-group"><button onClick={()=>window.print()}>Print <Printer size={15}/></button><button onClick={download}>Download Excel <FileText size={15}/></button></div></div>{adjustments.length?<OfficeTable headers={['Learner','Class','Term','Amount','Reason','Status','Recorded by','Action']} rows={adjustments.map(item=>[item.learnerName+' · '+item.admissionNumber,item.className,`${item.term} ${item.academicYear}`,`KES ${Number(item.amount||0).toLocaleString('en-KE')}`,item.reason,item.status||'Active',item.createdBy,item.status==='Reversed'?<small key={item.id}>{item.reversalReason} · {item.reversedBy}</small>:<button key={item.id} className="account-remove" onClick={()=>reverse(item)}>Reverse</button>])}/>:<div className="admissions-empty"><GraduationCap size={25}/><strong>No sponsorships recorded yet</strong><span>Use the learner search above when the school confirms its first sponsored learner.</span></div>}</section>{status&&<button className="parent-toast" onClick={()=>setStatus('')}><ClipboardCheck size={17}/><span>{status}</span><b>×</b></button>}</FinancePage>
 }
+
 function FinanceAuditPage() {
   const [items, setItems] = useState([]);
   const [status, setStatus] = useState("");
@@ -2290,7 +2221,7 @@ function ParentLiveFeesPage({ parentPhone }) {
   const currency=value=>`KES ${Number(value||0).toLocaleString('en-KE')}`
   const load=()=>{setLoading(true);return getParentLearners(parentPhone).then(setLearners).catch(error=>setStatus(error.message)).finally(()=>setLoading(false))}
   useEffect(()=>{load()},[parentPhone])
-  return <ParentPage title="Fees & payments"><section className="panel parent-live-panel"><div className="panel-heading"><div><h2>Live fee balances</h2><span>Confirmed school receipts update each learner balance automatically.</span></div><button onClick={load}>Refresh</button></div>{learners.length?learners.map(learner=><article className="parent-finance-record" key={learner.id}><div><strong>{learner.learnerName}</strong><small>{learner.placement?.className||learner.grade} · {learner.finance.term||'Fee plan pending'}</small></div><div><span>Fee due</span><b>{learner.finance.feeDue===null?'Not set':currency(learner.finance.feeDue)}</b></div><div><span>Paid</span><b>{currency(learner.finance.totalPaid)}</b></div><div><span>Balance</span><b className={learner.finance.balance===0?'cleared':''}>{learner.finance.balance===null?'Pending fee plan':currency(learner.finance.balance)}</b></div><details><summary>Payment history ({learner.payments.length})</summary>{learner.payments.length?learner.payments.map(payment=><p key={payment.receiptNumber}><strong>{payment.receiptNumber}</strong> · {currency(payment.amount)} · {payment.method} · {formatAdmissionCreatedAt(payment.issuedAt)}</p>):<p>No confirmed payment receipts yet.</p>}</details></article>):!loading&&<div className="admissions-empty"><FileText size={25}/><strong>No linked learner accounts</strong><span>Use the guardian phone number recorded during admission.</span></div>}</section><OfficialPaymentChannels/>{status&&<button className="parent-toast" onClick={()=>setStatus('')}><ClipboardCheck size={17}/><span>{status}</span><b>×</b></button>}</ParentPage>
+  return <ParentPage title="Fees & payments"><section className="panel parent-live-panel"><div className="panel-heading"><div><h2>Live fee balances</h2><span>Confirmed school receipts and sponsorships update each learner balance automatically.</span></div><button onClick={load}>Refresh</button></div>{learners.length?learners.map(learner=><article className="parent-finance-record" key={learner.id}><div><strong>{learner.learnerName}</strong><small>{learner.placement?.className||learner.grade} · {learner.finance.term||'Fee plan pending'}</small></div><div><span>Gross fee plan</span><b>{learner.finance.grossFeeDue===null?'Not set':currency(learner.finance.grossFeeDue)}</b></div><div><span>School sponsorship</span><b className={Number(learner.finance.sponsorshipAmount||0)>0?'cleared':''}>{currency(learner.finance.sponsorshipAmount)}</b></div><div><span>Family fee due</span><b>{learner.finance.feeDue===null?'Not set':currency(learner.finance.feeDue)}</b></div><div><span>Paid</span><b>{currency(learner.finance.totalPaid)}</b></div><div><span>Balance</span><b className={learner.finance.balance===0?'cleared':''}>{learner.finance.balance===null?'Pending fee plan':currency(learner.finance.balance)}</b></div><details><summary>Payment history ({learner.payments.length})</summary>{learner.payments.length?learner.payments.map(payment=><p key={payment.receiptNumber}><strong>{payment.receiptNumber}</strong> · {currency(payment.amount)} · {payment.method} · {formatAdmissionCreatedAt(payment.issuedAt)}</p>):<p>No confirmed payment receipts yet.</p>}</details></article>):!loading&&<div className="admissions-empty"><FileText size={25}/><strong>No linked learner accounts</strong><span>Use the guardian phone number recorded during admission.</span></div>}</section><OfficialPaymentChannels/>{status&&<button className="parent-toast" onClick={()=>setStatus('')}><ClipboardCheck size={17}/><span>{status}</span><b>×</b></button>}</ParentPage>
 }
 
 function ParentProgressPage({ parentPhone, mode }) {
@@ -2309,7 +2240,7 @@ function BursarFeeManagementPage() {
   const currency = amount => `KES ${Number(amount || 0).toLocaleString('en-KE')}`
   const search = query.replace(/\s+/g, '').toLowerCase()
   const accounts = learners.filter(item => !search || [item.admissionNumber, item.guardianPhone, item.guardianName, item.learnerName].some(value => String(value || '').replace(/\s+/g, '').toLowerCase().includes(search)))
-  return <FinancePage title="Fee accounts" action="Refresh accounts"><div className="teacher-assessment-grid"><section className="panel teacher-register"><div className="panel-heading"><h2>Set grade fee plan</h2><span>One plan applies to every stream in that grade.</span></div><form onSubmit={submit}><label>Grade<select name="grade" defaultValue="Grade 1">{['PP1', 'PP2', ...Array.from({ length: 9 }, (_, index) => `Grade ${index + 1}`)].map(grade => <option key={grade}>{grade}</option>)}</select></label><label>Academic year<input name="academicYear" defaultValue="2026" inputMode="numeric" pattern="[0-9]{4}" required/></label><label>Term<select name="term" defaultValue="Term 3"><option>Term 1</option><option>Term 2</option><option>Term 3</option></select></label><label>Fee due (KES)<input name="amount" type="number" min="0" placeholder="e.g. 15000" required/></label><button disabled={saving}>{saving ? 'Saving fee plan…' : 'Save grade fee plan'}</button></form></section><section className="panel teacher-register"><div className="panel-heading"><h2>Current fee plans</h2></div>{structures.length ? <div className="mark-register">{structures.map(item => <label key={item.id}><span>{item.grade} · {item.term} {item.academicYear}</span><b>{currency(item.amount)}</b></label>)}</div> : <div className="admissions-empty"><FileText size={25}/><strong>No fee plans set</strong><span>Create one fee plan per grade and term.</span></div>}</section></div><section className="panel full-panel academic-list"><div className="panel-heading"><div><h2>Learner fee accounts</h2><span>{accounts.length} account{accounts.length === 1 ? '' : 's'} shown · confirmed receipts only</span></div></div><label className="finance-search">Find a learner balance by admission number or parent phone<input value={query} onChange={event => setQuery(event.target.value)} placeholder="e.g. SD/ADM/2026/0001 or 2547XXXXXXXX"/></label>{accounts.length ? <OfficeTable headers={['Learner', 'Admission no.', 'Parent phone', 'Class', 'Fee due', 'Paid', 'Balance']} rows={accounts.map(item => [item.learnerName, item.admissionNumber, item.guardianPhone, item.className || item.grade, item.finance.feeDue === null ? 'Fee plan pending' : currency(item.finance.feeDue), currency(item.finance.totalPaid), item.finance.balance === null ? 'Fee plan pending' : currency(item.finance.balance)])}/> : <div className="admissions-empty"><Users size={25}/><strong>{query ? 'No matching fee account' : 'No learner accounts'}</strong><span>{query ? 'Check the admission number or parent phone number, then try again.' : 'Admissions will appear here after they are saved.'}</span></div>}</section>{status && <button className="parent-toast" onClick={() => setStatus('')}><ClipboardCheck size={17}/><span>{status}</span><b>×</b></button>}</FinancePage>
+  return <FinancePage title="Fee accounts" action="Refresh accounts"><div className="teacher-assessment-grid"><section className="panel teacher-register"><div className="panel-heading"><h2>Set grade fee plan</h2><span>One plan applies to every stream in that grade.</span></div><form onSubmit={submit}><label>Grade<select name="grade" defaultValue="Grade 1">{['PP1', 'PP2', ...Array.from({ length: 9 }, (_, index) => `Grade ${index + 1}`)].map(grade => <option key={grade}>{grade}</option>)}</select></label><label>Academic year<input name="academicYear" defaultValue="2026" inputMode="numeric" pattern="[0-9]{4}" required/></label><label>Term<select name="term" defaultValue="Term 3"><option>Term 1</option><option>Term 2</option><option>Term 3</option></select></label><label>Fee due (KES)<input name="amount" type="number" min="0" placeholder="e.g. 15000" required/></label><button disabled={saving}>{saving ? 'Saving fee plan…' : 'Save grade fee plan'}</button></form></section><section className="panel teacher-register"><div className="panel-heading"><h2>Current fee plans</h2></div>{structures.length ? <div className="mark-register">{structures.map(item => <label key={item.id}><span>{item.grade} · {item.term} {item.academicYear}</span><b>{currency(item.amount)}</b></label>)}</div> : <div className="admissions-empty"><FileText size={25}/><strong>No fee plans set</strong><span>Create one fee plan per grade and term.</span></div>}</section></div><section className="panel full-panel academic-list"><div className="panel-heading"><div><h2>Learner fee accounts</h2><span>{accounts.length} account{accounts.length === 1 ? '' : 's'} shown · confirmed receipts only</span></div></div><label className="finance-search">Find a learner balance by admission number or parent phone<input value={query} onChange={event => setQuery(event.target.value)} placeholder="e.g. SD/ADM/2026/0001 or 2547XXXXXXXX"/></label>{accounts.length ? <OfficeTable headers={['Learner', 'Admission no.', 'Parent phone', 'Class', 'Gross fee', 'Sponsorship', 'Family due', 'Paid', 'Balance']} rows={accounts.map(item => [item.learnerName, item.admissionNumber, item.guardianPhone, item.className || item.grade, item.finance.grossFeeDue === null ? 'Fee plan pending' : currency(item.finance.grossFeeDue), currency(item.finance.sponsorshipAmount), item.finance.feeDue === null ? 'Fee plan pending' : currency(item.finance.feeDue), currency(item.finance.totalPaid), item.finance.balance === null ? 'Fee plan pending' : currency(item.finance.balance)])}/> : <div className="admissions-empty"><Users size={25}/><strong>{query ? 'No matching fee account' : 'No learner accounts'}</strong><span>{query ? 'Check the admission number or parent phone number, then try again.' : 'Admissions will appear here after they are saved.'}</span></div>}</section>{status && <button className="parent-toast" onClick={() => setStatus('')}><ClipboardCheck size={17}/><span>{status}</span><b>×</b></button>}</FinancePage>
 }
 
 function HeadteacherMessagesPage(){const [messages,setMessages]=useState([]);const [formOpen,setFormOpen]=useState(false);const [loading,setLoading]=useState(true);const [sending,setSending]=useState(false);const [status,setStatus]=useState('');useEffect(()=>{getInternalMessages().then(setMessages).catch(error=>setStatus(error.message)).finally(()=>setLoading(false))},[]);const send=async(event)=>{event.preventDefault();const form=new FormData(event.currentTarget);setSending(true);try{const saved=await createInternalMessage({recipient:String(form.get('recipient')||''),subject:String(form.get('subject')||'').trim(),body:String(form.get('body')||'').trim()});setMessages(items=>[saved,...items]);setStatus(`Message sent to ${saved.recipient}.`);setFormOpen(false);event.currentTarget.reset()}catch(error){setStatus(error.message)}finally{setSending(false)}};return <div className="office-page leadership-page headteacher-messages"><div className="office-page-heading"><div><p className="eyebrow">School leadership · Connected</p><h2>Internal messages</h2><span>Send clear operational messages to staff groups and keep the school communication record.</span></div><button onClick={()=>setFormOpen(open=>!open)}>{formOpen?'Close form':'New message'} <ChevronRight size={16}/></button></div>{formOpen&&<section className="panel headteacher-message-form"><div className="panel-heading"><h2>Compose message</h2><span>Sent from Sr. Mary · Headteacher</span></div><form onSubmit={send}><label>Send to *<select name="recipient" defaultValue="" required><option value="" disabled>Choose recipient</option><option>All staff</option><option>All teaching staff</option><option>Secretary</option><option>Bursar</option><option>Grade 1 teachers</option><option>Grade 2 teachers</option><option>Grade 3 teachers</option><option>Grade 4 teachers</option><option>Grade 5 teachers</option><option>Grade 6 teachers</option><option>Grade 7 teachers</option><option>Grade 8 teachers</option><option>Grade 9 teachers</option></select></label><label>Subject *<input name="subject" placeholder="e.g. Grade 8 assessment moderation" required/></label><label className="message-body">Message *<textarea name="body" maxLength="1000" placeholder="Write the instruction, deadline, or follow-up message…" required/></label><button type="submit" disabled={sending}>{sending?'Sending message…':'Send internal message'} <ChevronRight size={17}/></button></form></section>}<section className="panel headteacher-message-log"><div className="panel-heading"><h2>Message log</h2><span>{loading?'Loading…':`${messages.length} sent message${messages.length===1?'':'s'}`}</span></div>{messages.length?messages.map(message=><article key={message.id}><MessageSquare size={20}/><div><strong>{message.subject}</strong><small>To: {message.recipient} · {new Intl.DateTimeFormat('en-KE',{dateStyle:'medium',timeStyle:'short'}).format(new Date(message.createdAt))}</small><p>{message.body}</p></div><span>{message.status}</span></article>):!loading&&<div className="admissions-empty"><MessageSquare size={25}/><strong>No messages sent yet</strong><span>Use “New message” to send the first internal instruction.</span></div>}</section>{status&&<button className="parent-toast" onClick={()=>setStatus('')}><ClipboardCheck size={17}/><span>{status}</span><b>×</b></button>}</div>}

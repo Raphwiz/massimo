@@ -576,22 +576,25 @@ function placementSuggestions(data, academicYear) {
 }
 
 function currentFeeSummary(data, application) {
+  const placement = application.placement
+  const sponsorships = (data.feeAdjustments || []).filter(item => item.admissionId === application.id && item.type === 'Sponsorship' && item.status !== 'Reversed' && (!placement?.academicYear || item.academicYear === placement.academicYear) && (!placement?.term || item.term === placement.term))
+  const sponsorshipAmount = sponsorships.reduce((total, item) => total + Number(item.amount || 0), 0)
   const balanceImport = (data.feeBalanceImports || []).filter(item => item.admissionId === application.id && Number.isFinite(Number(item.balance))).sort((a, b) => String(b.importedAt).localeCompare(String(a.importedAt)))[0]
   if (balanceImport) {
     const importedAt = String(balanceImport.importedAt || '')
     const totalPaid = data.receipts.filter(receipt => receipt.admissionId === application.id && (!importedAt || String(receipt.issuedAt || '') >= importedAt)).reduce((total, receipt) => total + Number(receipt.amount || 0), 0)
-    const feeDue = Math.max(0, Number(balanceImport.balance || 0))
-    return { feeDue, grossFeeDue: feeDue, bursaryAmount: 0, totalPaid, balance: Math.max(0, feeDue - totalPaid), term: 'Imported school balance', importedBalance: true, importedAt }
+    const grossFeeDue = Math.max(0, Number(balanceImport.balance || 0))
+    const feeDue = Math.max(0, grossFeeDue - sponsorshipAmount)
+    return { feeDue, grossFeeDue, sponsorshipAmount, bursaryAmount: sponsorshipAmount, totalPaid, balance: Math.max(0, feeDue - totalPaid), term: 'Imported school balance', importedBalance: true, importedAt }
   }
-  const placement = application.placement
-  if (!placement?.academicYear || !placement?.term) return { feeDue: null, totalPaid: 0, balance: null, term: null }
+  if (!placement?.academicYear || !placement?.term) return { feeDue: null, grossFeeDue: null, sponsorshipAmount, bursaryAmount: sponsorshipAmount, totalPaid: 0, balance: null, term: null }
   const residency = application.residency || 'Day scholar'
   const structure = data.feeStructures.find(item => item.grade === application.grade && (item.residency || 'Day scholar') === residency && item.academicYear === placement.academicYear && item.term === placement.term)
   const totalPaid = data.receipts.filter(receipt => receipt.admissionId === application.id).reduce((total, receipt) => total + Number(receipt.amount || 0), 0)
   const grossFeeDue = structure ? Number(structure.amount) : null
-  const bursaryAmount = grossFeeDue === null ? 0 : (data.feeAdjustments || []).filter(item => item.admissionId === application.id && item.academicYear === placement.academicYear && item.term === placement.term).reduce((total, item) => total + Number(item.amount || 0), 0)
+  const bursaryAmount = grossFeeDue === null ? 0 : sponsorshipAmount
   const feeDue = grossFeeDue === null ? null : Math.max(0, grossFeeDue - bursaryAmount)
-  return { feeDue, grossFeeDue, bursaryAmount, totalPaid, balance: feeDue === null ? null : Math.max(0, feeDue - totalPaid), term: structure ? `${structure.term} ${structure.academicYear}` : null }
+  return { feeDue, grossFeeDue, sponsorshipAmount: bursaryAmount, bursaryAmount, totalPaid, balance: feeDue === null ? null : Math.max(0, feeDue - totalPaid), term: structure ? `${structure.term} ${structure.academicYear}` : null }
 }
 
 function addFinanceAudit(data, request, action, recordType, recordId, detail = '') { data.financeAudit ??= []; data.financeAudit.unshift({ id:`finance-audit-${Date.now()}-${Math.random().toString(36).slice(2,7)}`, action, recordType, recordId, detail, by:request.account.name, role:request.account.role, createdAt:new Date().toISOString() }) }
@@ -831,7 +834,7 @@ async function createFeeStatementPdf(data, learner, servedBy = 'School office') 
   document.fillColor('#173662').fontSize(17).font('Helvetica-Bold').text("ST. DOROTHY'S SCHOOL MASSIMO", 108, 42); document.fontSize(8.5).font('Helvetica').text('P.O. Box 36-60607, Mikinduri, Meru, Kenya | +254 722 841 569 | stdorothysschoolmassimo@gmail.com', 108, 66); document.moveTo(42, 100).lineTo(553, 100).stroke('#1D5EAA')
   document.fillColor('#173662').fontSize(15).font('Helvetica-Bold').text('FEE STATEMENT', 42, 116); document.fontSize(8.5).font('Helvetica').fillColor('#536b84').text(`Statement No: ${statementNumber}`, 42, 138).text(`Generated: ${generatedAt.toLocaleString('en-KE')} | Statement period: ${finance.term || 'Current placement period'}`, 42, 151)
   document.fillColor('#173662').fontSize(10).font('Helvetica-Bold').text('Learner and guardian', 42, 180); document.font('Helvetica').fontSize(9).text(`Learner: ${learner.learnerName}`, 42, 198).text(`Admission number: ${learner.admissionNumber || 'Pending'}    Grade/Class: ${learner.placement?.className || learner.grade}`, 42, 212).text(`Guardian: ${learner.guardianName || 'Not recorded'}    Phone: ${learner.guardianPhone || 'Not recorded'}`, 42, 226)
-  document.fillColor('#173662').font('Helvetica-Bold').fontSize(10).text('Account summary', 42, 258); document.font('Helvetica').fontSize(9).text(`Gross fee plan: ${finance.grossFeeDue === null ? 'Fee plan pending' : money(finance.grossFeeDue)}`, 42, 277).text(`Approved discounts / bursaries: ${money(finance.bursaryAmount)}${finance.bursaryAmount ? '' : ' (none recorded)'}`, 42, 291).text(`Net fee due: ${finance.feeDue === null ? 'Fee plan pending' : money(finance.feeDue)}`, 42, 305).text(`Recorded payments: ${money(finance.totalPaid)}`, 42, 319); document.fillColor('#933B3B').font('Helvetica-Bold').fontSize(13).text(`Outstanding balance: ${finance.balance === null ? 'Fee plan pending' : money(finance.balance)}`, 42, 342)
+  document.fillColor('#173662').font('Helvetica-Bold').fontSize(10).text('Account summary', 42, 258); document.font('Helvetica').fontSize(9).text(`Gross fee plan: ${finance.grossFeeDue === null ? 'Fee plan pending' : money(finance.grossFeeDue)}`, 42, 277).text(`School sponsorship: ${money(finance.sponsorshipAmount)}${finance.sponsorshipAmount ? '' : ' (none recorded)'}`, 42, 291).text(`Family fee obligation: ${finance.feeDue === null ? 'Fee plan pending' : money(finance.feeDue)}`, 42, 305).text(`Recorded payments: ${money(finance.totalPaid)}`, 42, 319); document.fillColor('#933B3B').font('Helvetica-Bold').fontSize(13).text(`Outstanding balance: ${finance.balance === null ? 'Fee plan pending' : money(finance.balance)}`, 42, 342)
   document.fillColor('#173662').fontSize(10).text('Recorded payments and receipt references', 42, 360); document.font('Helvetica-Bold').fontSize(8).text('DATE', 42, 380).text('RECEIPT / REFERENCE', 125, 380).text('METHOD', 315, 380).text('AMOUNT', 440, 380); document.moveTo(42, 392).lineTo(553, 392).stroke('#B8C9DA'); document.font('Helvetica').fontSize(8)
   let y = 403; if (!receipts.length) document.text('No confirmed payments recorded for this learner.', 42, y)
   receipts.slice(0, 12).forEach(receipt => { document.text(String(receipt.issuedAt || '').slice(0, 10), 42, y).text(`${receipt.receiptNumber || ''}${receipt.paymentReference ? ` / ${receipt.paymentReference}` : ''}`, 125, y, { width: 180 }).text(receipt.paymentMethod || '', 315, y).text(money(receipt.amount), 440, y); y += 16 })
@@ -1555,7 +1558,14 @@ const server = createServer(async (request, response) => {
     if (request.method === 'GET' && url.pathname === '/api/finance/budget-summary') { const rows=data.feeStructures.map(structure=>{const residency=structure.residency||'Day scholar';const learners=data.admissions.filter(learner=>learner.grade===structure.grade&&(learner.residency||'Day scholar')===residency&&learner.placement?.academicYear===structure.academicYear&&learner.placement?.term===structure.term);const summaries=learners.map(learner=>currentFeeSummary(data,learner));return {id:structure.id,academicYear:structure.academicYear,term:structure.term,grade:structure.grade,residency,learnerCount:learners.length,feePerLearner:Number(structure.amount||0),grossExpected:Number(structure.amount||0)*learners.length,bursaryImpact:summaries.reduce((sum,item)=>sum+Number(item.bursaryAmount||0),0),netExpected:summaries.reduce((sum,item)=>sum+Number(item.feeDue||0),0),collected:summaries.reduce((sum,item)=>sum+Number(item.totalPaid||0),0),arrears:summaries.reduce((sum,item)=>sum+Number(item.balance||0),0)} }).filter(row=>row.learnerCount>0);return send(response,200,rows) }
     if (request.method === 'GET' && url.pathname === '/api/finance/audit') return send(response,200,(data.financeAudit||[]).slice().sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt))))
     if (request.method === 'GET' && url.pathname === '/api/finance/approval-requests') { const items=(data.financeApprovals||[]).filter(item=>request.account.role==='headteacher'||item.requestedBy===request.account.name); return send(response,200,items.slice().sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt)))) }
-    if (request.method === 'GET' && url.pathname === '/api/finance/adjustments') return send(response,200,(data.feeAdjustments||[]).slice().sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt))))
+    if (request.method === 'GET' && url.pathname === '/api/finance/adjustments') return send(response,200,(data.feeAdjustments||[]).filter(item=>item.type==='Sponsorship').slice().sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt))))
+    if (request.method === 'GET' && url.pathname === '/api/finance/sponsorships/workbook') {
+      const workbook = new ExcelJS.Workbook(); const sheet = workbook.addWorksheet('Sponsorship register')
+      sheet.columns = [{header:'Learner',key:'learner',width:28},{header:'Admission number',key:'admission',width:20},{header:'Class',key:'className',width:22},{header:'Academic year',key:'year',width:15},{header:'Term',key:'term',width:13},{header:'Amount (KES)',key:'amount',width:16},{header:'Reason',key:'reason',width:28},{header:'Status',key:'status',width:14},{header:'Recorded by',key:'by',width:22},{header:'Recorded at',key:'at',width:22}]
+      ;(data.feeAdjustments||[]).filter(item=>item.type==='Sponsorship').forEach(item=>sheet.addRow({learner:item.learnerName,admission:item.admissionNumber,className:item.className,year:item.academicYear,term:item.term,amount:Number(item.amount||0),reason:item.reason,status:item.status||'Active',by:item.createdBy,at:item.createdAt}))
+      sheet.getRow(1).font={bold:true,color:{argb:'FFFFFFFF'}}; sheet.getRow(1).fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF173662'}}; sheet.views=[{state:'frozen',ySplit:1}]
+      const buffer=await workbook.xlsx.writeBuffer(); response.writeHead(200,{'Content-Type':'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','Content-Disposition':'attachment; filename="st_dorothy_sponsorship_register.xlsx"'}); return response.end(Buffer.from(buffer))
+    }
     if (request.method === 'GET' && url.pathname === '/api/finance/cashbook') return send(response, 200, data.cashbookEntries.slice().sort((a,b) => String(b.date).localeCompare(String(a.date))))
     if (request.method === "POST" && url.pathname === "/api/finance/cashbook") {
       const input = await body(request);
@@ -1846,12 +1856,13 @@ const server = createServer(async (request, response) => {
       )
         return send(response, 400, {
           error:
-            "Choose a placed learner and valid bursary or discount amount.",
+            "Choose a placed learner and enter a valid sponsorship amount.",
         });
+      if ((data.feeAdjustments||[]).some(item=>item.type==='Sponsorship'&&item.status!=='Reversed'&&item.admissionId===learner.id&&item.academicYear===placement.academicYear&&item.term===placement.term)) return send(response,409,{error:`${learner.learnerName} already has an active sponsorship for ${placement.term} ${placement.academicYear}.`})
       const requestItem = {
-        id: `approval-${Date.now()}`,
-        type: "Bursary / discount",
-        status: "Pending Headteacher approval",
+        id: `sponsorship-${Date.now()}`,
+        type: "Sponsorship",
+        status: "Active",
         admissionId: learner.id,
         learnerName: learner.learnerName,
         admissionNumber: learner.admissionNumber,
@@ -1859,21 +1870,27 @@ const server = createServer(async (request, response) => {
         academicYear: placement.academicYear,
         term: placement.term,
         amount,
-        reason: text(input.reason, 180) || "Bursary / approved discount",
+        reason: text(input.reason, 180) || "School sponsorship",
         createdAt: new Date().toISOString(),
-        requestedBy: request.account.name,
+        createdBy: request.account.name,
       };
-      data.financeApprovals.unshift(requestItem);
+      data.feeAdjustments.unshift(requestItem);
       addFinanceAudit(
         data,
         request,
-        "Requested approval",
-        "Bursary / discount",
+        "Created",
+        "Sponsorship",
         requestItem.id,
         `${requestItem.learnerName} · ${money(amount)} · ${requestItem.term} ${requestItem.academicYear}`,
       );
       await saveData(data);
       return send(response, 201, requestItem);
+    }
+    if (request.method === 'PUT' && /^\/api\/finance\/adjustments\/[^/]+\/reverse$/.test(url.pathname)) {
+      const id=decodeURIComponent(url.pathname.split('/')[4]); const item=(data.feeAdjustments||[]).find(entry=>entry.id===id&&entry.type==='Sponsorship'); const input=await body(request); const reason=text(input.reason,180)
+      if(!item)return send(response,404,{error:'Sponsorship record not found.'}); if(item.status==='Reversed')return send(response,400,{error:'This sponsorship has already been reversed.'}); if(!reason)return send(response,400,{error:'Enter the reason for reversing this sponsorship.'})
+      item.status='Reversed'; item.reversalReason=reason; item.reversedAt=new Date().toISOString(); item.reversedBy=request.account.name
+      addFinanceAudit(data,request,'Reversed','Sponsorship',item.id,`${item.learnerName} · ${money(item.amount)} · ${reason}`); await saveData(data); return send(response,200,item)
     }
     if (
       request.method === "PUT" &&

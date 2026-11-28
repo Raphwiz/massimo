@@ -142,6 +142,8 @@ export const getBudgetSummary = () => request('/api/finance/budget-summary')
 export const getFinanceAudit = () => request('/api/finance/audit')
 export const getFeeAdjustments = () => request('/api/finance/adjustments')
 export const createFeeAdjustment = (adjustment) => request('/api/finance/adjustments', { method:'POST', body:JSON.stringify(adjustment) })
+export const reverseFeeAdjustment = (id, reason) => request(`/api/finance/adjustments/${encodeURIComponent(id)}/reverse`, { method:'PUT', body:JSON.stringify({ reason }) })
+export const sponsorshipWorkbookUrl = () => `${typeof window!=='undefined'&&['localhost','127.0.0.1'].includes(window.location.hostname)?'http://127.0.0.1:8787':''}/api/finance/sponsorships/workbook`
 export const getFinanceApprovalRequests = () => request('/api/finance/approval-requests')
 export const decideFinanceApproval = (id, decision, decisionNote = '') => request(`/api/finance/approval-requests/${encodeURIComponent(id)}`, { method:'PUT', body:JSON.stringify({ decision, decisionNote }) })
 export const getCashbook = () => request('/api/finance/cashbook')
